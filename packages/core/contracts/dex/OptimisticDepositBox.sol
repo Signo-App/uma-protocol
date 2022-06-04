@@ -26,10 +26,9 @@ contract OptimisticDex is Testable, Lockable {
 
     // Represents a single caller's deposit box. All collateral is held by this contract.
     struct OptimisticDexData {
-        // Requested amount of collateral, denominated in the quote asset of the price identifier.
-        // Example: If the price identifier is ETH/USD, and the `withdrawalRequestAmount = 1000`, then
-        // this represents a withdrawal request for 1000 USD worth of wETH.
-        uint256 withdrawalRequestAmount;
+        address fillToken;
+        uint256 fillTokenAmount;
+        uint8 chainId;
         // Timestamp of the latest withdrawal request. A withdrawal request is pending if `withdrawalRequestTimestamp != 0`.
         uint256 withdrawalRequestTimestamp;
         // Collateral value.
@@ -37,7 +36,7 @@ contract OptimisticDex is Testable, Lockable {
     }
 
     // Maps addresses to their deposit boxes. Each address can have only one position.
-    mapping(address => OptimisticDexData) private depositBoxes;
+    mapping(address => OptimisticDexData) private fillRequests;
 
     // Unique identifier for price feed ticker.
     bytes32 private priceIdentifier;
@@ -76,7 +75,7 @@ contract OptimisticDex is Testable, Lockable {
      ****************************************/
 
     modifier noPendingWithdrawal(address user) {
-        _depositBoxHasNoPendingWithdrawal(user);
+        _fillRequestHasNoPendingWithdrawal(user);
         _;
     }
 
@@ -116,13 +115,13 @@ contract OptimisticDex is Testable, Lockable {
      */
     function deposit(uint256 collateralAmount) public nonReentrant() {
         require(collateralAmount > 0, "Invalid collateral amount");
-        OptimisticDexData storage depositBoxData = depositBoxes[msg.sender];
-        if (depositBoxData.collateral == 0) {
+        OptimisticDexData storage fillRequestData = fillRequests[msg.sender];
+        if (fillRequestData.collateral == 0) {
             emit NewOptimisticDex(msg.sender);
         }
 
         // Increase the individual deposit box and global collateral balance by collateral amount.
-        depositBoxData.collateral = depositBoxData.collateral.add(collateralAmount);
+        fillRequestData.collateral = fillRequestData.collateral.add(collateralAmount);
         totalOptimisticDexCollateral = totalOptimisticDexCollateral.add(collateralAmount);
 
         emit Deposit(msg.sender, collateralAmount);
@@ -145,63 +144,63 @@ contract OptimisticDex is Testable, Lockable {
         noPendingWithdrawal(msg.sender)
         nonReentrant()
     {
-        OptimisticDexData storage depositBoxData = depositBoxes[msg.sender];
+        OptimisticDexData storage fillRequestData = fillRequests[msg.sender];
         require(denominatedCollateralAmount > 0, "Invalid collateral amount");
 
         // Update the position data for the user.
-        depositBoxData.withdrawalRequestAmount = denominatedCollateralAmount;
-        depositBoxData.withdrawalRequestTimestamp = getCurrentTime();
+        fillRequestData.fillRequestAmount = denominatedCollateralAmount;
+        fillRequestData.withdrawalRequestTimestamp = getCurrentTime();
 
-        emit RequestWithdrawal(msg.sender, denominatedCollateralAmount, depositBoxData.withdrawalRequestTimestamp);
+        emit RequestWithdrawal(msg.sender, denominatedCollateralAmount, fillRequestData.withdrawalRequestTimestamp);
 
         // A price request is sent for the current timestamp.
-        _requestOraclePrice(depositBoxData.withdrawalRequestTimestamp);
+        _requestOraclePrice(fillRequestData.withdrawalRequestTimestamp);
     }
 
     /**
      * @notice After a withdrawal request (i.e., by a call to `requestWithdrawal`) and optimistic oracle
-     * price resolution, withdraws `depositBoxData.withdrawalRequestAmount` of collateral currency
+     * price resolution, withdraws `fillRequestData.fillRequestAmount` of collateral currency
      * denominated in the quote asset.
      * @dev Might not withdraw the full requested amount in order to account for precision loss.
      * @return amountWithdrawn The actual amount of collateral withdrawn.
      */
     function executeWithdrawal() external nonReentrant() returns (uint256 amountWithdrawn) {
-        OptimisticDexData storage depositBoxData = depositBoxes[msg.sender];
+        OptimisticDexData storage fillRequestData = fillRequests[msg.sender];
         require(
-            depositBoxData.withdrawalRequestTimestamp != 0 &&
-                depositBoxData.withdrawalRequestTimestamp <= getCurrentTime(),
+            fillRequestData.withdrawalRequestTimestamp != 0 &&
+                fillRequestData.withdrawalRequestTimestamp <= getCurrentTime(),
             "Invalid withdraw request"
         );
 
         // Get the resolved price or revert.
         // Note that in practice, you may have to do some additional math here to deal with scaling in the oracle price.
-        uint256 exchangeRate = _getOraclePrice(depositBoxData.withdrawalRequestTimestamp);
+        uint256 exchangeRate = _getOraclePrice(fillRequestData.withdrawalRequestTimestamp);
 
         // Calculate denomated amount of collateral based on resolved exchange rate.
         // Example 1: User wants to withdraw $1000 of ETH, exchange rate is $2000/ETH, therefore user to receive 0.5 ETH.
         // Example 2: User wants to withdraw $2500 of ETH, exchange rate is $2000/ETH, therefore user to receive 1.25 ETH.
         uint256 denominatedAmountToWithdraw =
-            FixedPoint.Unsigned(depositBoxData.withdrawalRequestAmount).div(FixedPoint.Unsigned(exchangeRate)).rawValue;
+            FixedPoint.Unsigned(fillRequestData.fillRequestAmount).div(FixedPoint.Unsigned(exchangeRate)).rawValue;
 
         // If withdrawal request amount is > collateral, then withdraw the full collateral amount.
-        if (denominatedAmountToWithdraw >= depositBoxData.collateral) {
-            denominatedAmountToWithdraw = depositBoxData.collateral;
+        if (denominatedAmountToWithdraw >= fillRequestData.collateral) {
+            denominatedAmountToWithdraw = fillRequestData.collateral;
             emit EndedOptimisticDex(msg.sender);
         }
 
         // Decrease the individual deposit box and global collateral balance.
-        depositBoxData.collateral = depositBoxData.collateral.sub(denominatedAmountToWithdraw);
+        fillRequestData.collateral = fillRequestData.collateral.sub(denominatedAmountToWithdraw);
         totalOptimisticDexCollateral = totalOptimisticDexCollateral.sub(denominatedAmountToWithdraw);
 
         emit RequestWithdrawalExecuted(
             msg.sender,
             denominatedAmountToWithdraw,
             exchangeRate,
-            depositBoxData.withdrawalRequestTimestamp
+            fillRequestData.withdrawalRequestTimestamp
         );
 
         // Reset withdrawal request by setting withdrawal request timestamp to 0.
-        _resetWithdrawalRequest(depositBoxData);
+        _resetWithdrawalRequest(fillRequestData);
 
         // Transfer approved withdrawal amount from the contract to the caller.
         collateralCurrency.safeTransfer(msg.sender, denominatedAmountToWithdraw);
@@ -212,17 +211,17 @@ contract OptimisticDex is Testable, Lockable {
      * @notice Cancels a pending withdrawal request.
      */
     function cancelWithdrawal() external nonReentrant() {
-        OptimisticDexData storage depositBoxData = depositBoxes[msg.sender];
-        require(depositBoxData.withdrawalRequestTimestamp != 0, "No pending withdrawal");
+        OptimisticDexData storage fillRequestData = fillRequests[msg.sender];
+        require(fillRequestData.withdrawalRequestTimestamp != 0, "No pending withdrawal");
 
         emit RequestWithdrawalCanceled(
             msg.sender,
-            depositBoxData.withdrawalRequestAmount,
-            depositBoxData.withdrawalRequestTimestamp
+            fillRequestData.fillRequestAmount,
+            fillRequestData.withdrawalRequestTimestamp
         );
 
         // Reset withdrawal request by setting withdrawal request timestamp and withdrawal amount to 0.
-        _resetWithdrawalRequest(depositBoxData);
+        _resetWithdrawalRequest(fillRequestData);
     }
 
     /**
@@ -231,7 +230,7 @@ contract OptimisticDex is Testable, Lockable {
      * @return the collateral amount in the deposit box (i.e. available for withdrawal).
      */
     function getCollateral(address user) external view nonReentrantView() returns (uint256) {
-        return depositBoxes[user].collateral;
+        return fillRequests[user].collateral;
     }
 
     /****************************************
@@ -245,13 +244,13 @@ contract OptimisticDex is Testable, Lockable {
         oracle.requestPrice(priceIdentifier, requestedTime, "", IERC20(collateralCurrency), 0);
     }
 
-    function _resetWithdrawalRequest(OptimisticDexData storage depositBoxData) internal {
-        depositBoxData.withdrawalRequestAmount = 0;
-        depositBoxData.withdrawalRequestTimestamp = 0;
+    function _resetWithdrawalRequest(OptimisticDexData storage fillRequestData) internal {
+        fillRequestData.fillRequestAmount = 0;
+        fillRequestData.withdrawalRequestTimestamp = 0;
     }
 
-    function _depositBoxHasNoPendingWithdrawal(address user) internal view {
-        require(depositBoxes[user].withdrawalRequestTimestamp == 0, "Pending withdrawal");
+    function _fillRequestHasNoPendingWithdrawal(address user) internal view {
+        require(fillRequests[user].withdrawalRequestTimestamp == 0, "Pending withdrawal");
     }
 
     function _getOptimisticOracle() internal view returns (OptimisticOracleInterface) {
