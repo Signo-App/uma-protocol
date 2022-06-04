@@ -170,7 +170,22 @@ contract OptimisticDex is Testable, Lockable {
         emit RequestWithdrawal(msg.sender, denominatedCollateralAmount, fillRequestData.withdrawalRequestTimestamp);
 
         // A price request is sent for the current timestamp.
-        _requestOraclePrice(fillRequestData.withdrawalRequestTimestamp);
+        _requestOraclePrice(fillRequestData.withdrawalRequestTimestamp, msg.sender);
+    }
+
+    // If you did a fill, you can delete a requested withdrawal and make your own withdrawal request.
+    function withdrawAfterFill(uint256 denominatedCollateralAmount, address depositor) public nonReentrant() {
+        OptimisticDexData storage fillRequestData = fillRequests[depositor];
+        require(denominatedCollateralAmount > 0, "Invalid collateral amount");
+
+        // Update the position data for the user.
+        fillRequestData.fillRequestAmount = denominatedCollateralAmount;
+        fillRequestData.withdrawalRequestTimestamp = getCurrentTime();
+
+        emit RequestWithdrawal(msg.sender, denominatedCollateralAmount, fillRequestData.withdrawalRequestTimestamp);
+
+        // A price request is sent for the current timestamp.
+        _requestOraclePrice(fillRequestData.withdrawalRequestTimestamp, depositor);
     }
 
     /**
@@ -254,10 +269,10 @@ contract OptimisticDex is Testable, Lockable {
      ****************************************/
 
     // Requests a price for `priceIdentifier` at `requestedTime` from the Optimistic Oracle.
-    function _requestOraclePrice(uint256 requestedTime) internal {
+    function _requestOraclePrice(uint256 requestedTime, address recipient) internal {
         OptimisticOracleInterface oracle = _getOptimisticOracle();
         // For other use cases, you may need ancillary data or a reward. Here, they are both zero.
-        oracle.requestPrice(priceIdentifier, requestedTime, "", IERC20(collateralCurrency), 0);
+        oracle.requestPrice(priceIdentifier, requestedTime, recipient, IERC20(collateralCurrency), 0);
     }
 
     function _resetWithdrawalRequest(OptimisticDexData storage fillRequestData) internal {
