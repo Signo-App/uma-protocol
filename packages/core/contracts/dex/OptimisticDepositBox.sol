@@ -224,23 +224,6 @@ contract OptimisticDex is Testable, Lockable {
     }
 
     /**
-     * @notice Cancels a pending withdrawal request.
-     */
-    function cancelWithdrawal() external nonReentrant() {
-        OptimisticDexData storage fillRequestData = fillRequests[msg.sender];
-        require(fillRequestData.withdrawalRequestTimestamp != 0, "No pending withdrawal");
-
-        emit RequestWithdrawalCanceled(
-            msg.sender,
-            fillRequestData.fillRequestAmount,
-            fillRequestData.withdrawalRequestTimestamp
-        );
-
-        // Reset withdrawal request by setting withdrawal request timestamp and withdrawal amount to 0.
-        _resetWithdrawalRequest(fillRequestData);
-    }
-
-    /**
      * @notice Accessor method for a user's collateral.
      * @param user address whose collateral amount is retrieved.
      * @return the collateral amount in the deposit box (i.e. available for withdrawal).
