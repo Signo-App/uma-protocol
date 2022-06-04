@@ -33,6 +33,7 @@ contract OptimisticDex is Testable, Lockable {
         uint256 withdrawalRequestTimestamp;
         // Collateral value.
         uint256 collateral;
+        address recipient;
     }
 
     // Maps addresses to their deposit boxes. Each address can have only one position.
@@ -139,6 +140,7 @@ contract OptimisticDex is Testable, Lockable {
         fillRequestData.fillToken = fillToken;
         fillRequestData.fillRequestAmount = fillRequestAmount;
         fillRequestData.chainId = chainId;
+        fillRequestData.recipient = msg.sender;
 
         emit Deposit(msg.sender, collateralAmount, fillToken, fillRequestAmount, chainId);
 
@@ -195,8 +197,8 @@ contract OptimisticDex is Testable, Lockable {
      * @dev Might not withdraw the full requested amount in order to account for precision loss.
      * @return amountWithdrawn The actual amount of collateral withdrawn.
      */
-    function executeWithdrawal() external nonReentrant() returns (uint256 amountWithdrawn) {
-        OptimisticDexData storage fillRequestData = fillRequests[msg.sender];
+    function executeWithdrawal(address depositor) external nonReentrant() returns (uint256 amountWithdrawn) {
+        OptimisticDexData storage fillRequestData = fillRequests[depositor];
         require(
             fillRequestData.withdrawalRequestTimestamp != 0 &&
                 fillRequestData.withdrawalRequestTimestamp <= getCurrentTime(),
@@ -205,7 +207,7 @@ contract OptimisticDex is Testable, Lockable {
 
         // Get the resolved price or revert.
         // Note that in practice, you may have to do some additional math here to deal with scaling in the oracle price.
-        uint256 exchangeRate = _getOraclePrice(fillRequestData.withdrawalRequestTimestamp);
+        uint256 exchangeRate = _getOraclePrice(fillRequestData.withdrawalRequestTimestamp, fillRequestData.recipient);
 
         // Calculate denomated amount of collateral based on resolved exchange rate.
         // Example 1: User wants to withdraw $1000 of ETH, exchange rate is $2000/ETH, therefore user to receive 0.5 ETH.
@@ -297,13 +299,14 @@ contract OptimisticDex is Testable, Lockable {
     }
 
     // Fetches a resolved oracle price from the Optimistic Oracle. Reverts if the oracle hasn't resolved for this request.
-    function _getOraclePrice(uint256 withdrawalRequestTimestamp) internal returns (uint256) {
+    function _getOraclePrice(uint256 withdrawalRequestTimestamp, address recipient) internal returns (uint256) {
         OptimisticOracleInterface oracle = _getOptimisticOracle();
         require(
-            oracle.hasPrice(address(this), priceIdentifier, withdrawalRequestTimestamp, ""),
+            oracle.hasPrice(address(this), priceIdentifier, withdrawalRequestTimestamp, abi.encode(recipient)),
             "Unresolved oracle price"
         );
-        int256 oraclePrice = oracle.settleAndGetPrice(priceIdentifier, withdrawalRequestTimestamp, "");
+        int256 oraclePrice =
+            oracle.settleAndGetPrice(priceIdentifier, withdrawalRequestTimestamp, abi.encode(recipient));
 
         // For simplicity we don't want to deal with negative prices.
         if (oraclePrice < 0) {
