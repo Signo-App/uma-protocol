@@ -55,8 +55,6 @@ contract OptimisticDex is Testable, Lockable {
      *                EVENTS                *
      ****************************************/
 
-    event NewOptimisticDex(address indexed user);
-    event EndedOptimisticDex(address indexed user);
     event Deposit(
         address indexed user,
         uint256 indexed collateralAmount,
@@ -128,9 +126,6 @@ contract OptimisticDex is Testable, Lockable {
     ) public nonReentrant() {
         require(collateralAmount > 0, "Invalid collateral amount");
         OptimisticDexData storage fillRequestData = fillRequests[msg.sender];
-        if (fillRequestData.collateral == 0) {
-            emit NewOptimisticDex(msg.sender);
-        }
 
         // Increase the individual deposit box and global collateral balance by collateral amount.
         fillRequestData.collateral = fillRequestData.collateral.add(collateralAmount);
