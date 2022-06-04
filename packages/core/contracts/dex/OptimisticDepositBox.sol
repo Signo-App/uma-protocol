@@ -56,7 +56,13 @@ contract OptimisticDex is Testable, Lockable {
 
     event NewOptimisticDex(address indexed user);
     event EndedOptimisticDex(address indexed user);
-    event Deposit(address indexed user, uint256 indexed collateralAmount);
+    event Deposit(
+        address indexed user,
+        uint256 indexed collateralAmount,
+        address indexed fillToken,
+        uint256 fillAmount,
+        uint8 chainId
+    );
     event RequestWithdrawal(address indexed user, uint256 indexed collateralAmount, uint256 withdrawalRequestTimestamp);
     event RequestWithdrawalExecuted(
         address indexed user,
@@ -113,7 +119,12 @@ contract OptimisticDex is Testable, Lockable {
      * @dev This contract must be approved to spend at least `collateralAmount` of `collateralCurrency`.
      * @param collateralAmount total amount of collateral tokens to be sent to the sponsor's position.
      */
-    function deposit(uint256 collateralAmount) public nonReentrant() {
+    function deposit(
+        uint256 collateralAmount,
+        address fillToken,
+        uint256 fillRequestAmount,
+        uint8 chainId
+    ) public nonReentrant() {
         require(collateralAmount > 0, "Invalid collateral amount");
         OptimisticDexData storage fillRequestData = fillRequests[msg.sender];
         if (fillRequestData.collateral == 0) {
@@ -124,7 +135,12 @@ contract OptimisticDex is Testable, Lockable {
         fillRequestData.collateral = fillRequestData.collateral.add(collateralAmount);
         totalOptimisticDexCollateral = totalOptimisticDexCollateral.add(collateralAmount);
 
-        emit Deposit(msg.sender, collateralAmount);
+        // Set more fill request fields.
+        fillRequestData.fillToken = fillToken;
+        fillRequestData.fillRequestAmount = fillRequestAmount;
+        fillRequestData.chainId = chainId;
+
+        emit Deposit(msg.sender, collateralAmount, fillToken, fillRequestAmount, chainId);
 
         // Move collateral currency from sender to contract.
         collateralCurrency.safeTransferFrom(msg.sender, address(this), collateralAmount);
