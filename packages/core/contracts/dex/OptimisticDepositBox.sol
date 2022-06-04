@@ -66,9 +66,9 @@ contract OptimisticDex is Testable, Lockable {
     );
     event RequestWithdrawal(address indexed user, uint256 indexed collateralAmount, uint256 withdrawalRequestTimestamp);
     event RequestWithdrawalExecuted(
-        address indexed user,
-        uint256 indexed collateralAmount,
-        uint256 exchangeRate,
+        address indexed filler,
+        uint256 indexed amountFilled,
+        address indexed depositor,
         uint256 withdrawalRequestTimestamp
     );
     event RequestWithdrawalCanceled(
@@ -207,37 +207,20 @@ contract OptimisticDex is Testable, Lockable {
 
         // Get the resolved price or revert.
         // Note that in practice, you may have to do some additional math here to deal with scaling in the oracle price.
-        uint256 exchangeRate = _getOraclePrice(fillRequestData.withdrawalRequestTimestamp, fillRequestData.recipient);
-
-        // Calculate denomated amount of collateral based on resolved exchange rate.
-        // Example 1: User wants to withdraw $1000 of ETH, exchange rate is $2000/ETH, therefore user to receive 0.5 ETH.
-        // Example 2: User wants to withdraw $2500 of ETH, exchange rate is $2000/ETH, therefore user to receive 1.25 ETH.
-        uint256 denominatedAmountToWithdraw =
-            FixedPoint.Unsigned(fillRequestData.fillRequestAmount).div(FixedPoint.Unsigned(exchangeRate)).rawValue;
-
-        // If withdrawal request amount is > collateral, then withdraw the full collateral amount.
-        if (denominatedAmountToWithdraw >= fillRequestData.collateral) {
-            denominatedAmountToWithdraw = fillRequestData.collateral;
-            emit EndedOptimisticDex(msg.sender);
-        }
+        uint256 amountFilled = _getOraclePrice(fillRequestData.withdrawalRequestTimestamp, fillRequestData.recipient);
 
         // Decrease the individual deposit box and global collateral balance.
-        fillRequestData.collateral = fillRequestData.collateral.sub(denominatedAmountToWithdraw);
-        totalOptimisticDexCollateral = totalOptimisticDexCollateral.sub(denominatedAmountToWithdraw);
+        fillRequestData.collateral = fillRequestData.collateral.sub(amountFilled);
+        totalOptimisticDexCollateral = totalOptimisticDexCollateral.sub(amountFilled);
 
-        emit RequestWithdrawalExecuted(
-            msg.sender,
-            denominatedAmountToWithdraw,
-            exchangeRate,
-            fillRequestData.withdrawalRequestTimestamp
-        );
+        emit RequestWithdrawalExecuted(msg.sender, amountFilled, depositor, fillRequestData.withdrawalRequestTimestamp);
 
         // Reset withdrawal request by setting withdrawal request timestamp to 0.
         _resetWithdrawalRequest(fillRequestData);
 
         // Transfer approved withdrawal amount from the contract to the caller.
-        collateralCurrency.safeTransfer(msg.sender, denominatedAmountToWithdraw);
-        return denominatedAmountToWithdraw;
+        collateralCurrency.safeTransfer(msg.sender, amountFilled);
+        return amountFilled;
     }
 
     /**
