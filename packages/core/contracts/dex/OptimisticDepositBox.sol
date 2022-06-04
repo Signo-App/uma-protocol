@@ -272,7 +272,7 @@ contract OptimisticDex is Testable, Lockable {
     function _requestOraclePrice(uint256 requestedTime, address recipient) internal {
         OptimisticOracleInterface oracle = _getOptimisticOracle();
         // For other use cases, you may need ancillary data or a reward. Here, they are both zero.
-        oracle.requestPrice(priceIdentifier, requestedTime, recipient, IERC20(collateralCurrency), 0);
+        oracle.requestPrice(priceIdentifier, requestedTime, abi.encode(recipient), IERC20(collateralCurrency), 0);
     }
 
     function _resetWithdrawalRequest(OptimisticDexData storage fillRequestData) internal {
