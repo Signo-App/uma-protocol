@@ -27,7 +27,7 @@ contract OptimisticDex is Testable, Lockable {
     // Represents a single caller's deposit box. All collateral is held by this contract.
     struct OptimisticDexData {
         address fillToken;
-        uint256 fillTokenAmount;
+        uint256 fillRequestAmount;
         uint8 chainId;
         // Timestamp of the latest withdrawal request. A withdrawal request is pending if `withdrawalRequestTimestamp != 0`.
         uint256 withdrawalRequestTimestamp;
