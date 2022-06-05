@@ -54,7 +54,6 @@ contract OptimisticDex is Testable, Lockable {
     /****************************************
      *                EVENTS                *
      ****************************************/
-
     event Deposit(
         address indexed user,
         uint256 indexed collateralAmount,
@@ -67,11 +66,6 @@ contract OptimisticDex is Testable, Lockable {
         address indexed filler,
         uint256 indexed amountFilled,
         address indexed depositor,
-        uint256 withdrawalRequestTimestamp
-    );
-    event RequestWithdrawalCanceled(
-        address indexed user,
-        uint256 indexed collateralAmount,
         uint256 withdrawalRequestTimestamp
     );
 
