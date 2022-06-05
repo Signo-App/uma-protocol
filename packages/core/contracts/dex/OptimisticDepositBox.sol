@@ -61,6 +61,7 @@ contract OptimisticDex is Testable, Lockable {
     FinderInterface finder;
 
     // The collateral currency used to back the positions in this contract.
+    // TODO: Allow deposits in any ERC-20 token, not just a pre-set token.
     IERC20 public collateralCurrency;
 
     // Total collateral of all depositors.
@@ -133,6 +134,7 @@ contract OptimisticDex is Testable, Lockable {
      * @dev This contract must be approved to spend at least `collateralAmount` of `collateralCurrency`.
      * @param collateralAmount total amount of collateral tokens to be sent to the sponsor's position.
      */
+    // TODO: Specify the address you want to receive the tokens on the other chain, not necessarily msg.sender.
     function deposit(
         uint256 collateralAmount,
         address fillToken,
@@ -184,12 +186,11 @@ contract OptimisticDex is Testable, Lockable {
         // A price request is sent for the current timestamp.
         _requestOraclePrice(fillRequestData.withdrawalRequestTimestamp, msg.sender);
 
-        // TODO: Request and propose at the same time.
+        // TODO: Don't call the oracle here, create request within contract and execute later in another function.
     }
 
-    // TODO: Have a function to cancel a deposit and be able to withdraw.
-
     // If you did a fill, you can delete a requested withdrawal and make your own withdrawal request.
+    // TODO: Allow withdrawal to a different address than msg.sender, specified in the OptimisticFill contract.
     function requestWithdrawalAfterFill(uint256 fillAmount, address depositor) public nonReentrant() {
         OptimisticDexData storage fillRequestData = fillRequests[depositor];
         require(fillAmount > 0, "Invalid collateral amount");
