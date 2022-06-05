@@ -36,18 +36,6 @@ contract OptimisticDex is Testable, Lockable {
         address recipient;
     }
 
-    // Represents a single fill withdrawal.
-    struct FillWithdrawal {
-        address fillToken;
-        uint256 fillRequestAmount;
-        uint8 chainId;
-        // Timestamp of the latest withdrawal request. A withdrawal request is pending if `withdrawalRequestTimestamp != 0`.
-        uint256 withdrawalRequestTimestamp;
-        // Collateral value.
-        uint256 collateral;
-        address recipient;
-    }
-
     // Maps addresses to their deposit boxes. Each address can have only one position.
     mapping(address => DepositData) private fillRequests;
 
@@ -71,11 +59,12 @@ contract OptimisticDex is Testable, Lockable {
      *                EVENTS                *
      ****************************************/
     event Deposit(
-        address indexed user,
+        address indexed depositor,
         uint256 indexed collateralAmount,
         address indexed fillToken,
         uint256 fillAmount,
-        uint8 chainId
+        uint8 chainId,
+        address recipient
     );
     event RequestWithdrawal(address indexed user, uint256 indexed collateralAmount, uint256 withdrawalRequestTimestamp);
     event RequestWithdrawalAfterFill(
@@ -134,12 +123,12 @@ contract OptimisticDex is Testable, Lockable {
      * @dev This contract must be approved to spend at least `collateralAmount` of `collateralCurrency`.
      * @param collateralAmount total amount of collateral tokens to be sent to the sponsor's position.
      */
-    // TODO: Specify the address you want to receive the tokens on the other chain, not necessarily msg.sender.
     function deposit(
         uint256 collateralAmount,
         address fillToken,
         uint256 fillRequestAmount,
-        uint8 chainId
+        uint8 chainId,
+        address recipient
     ) public nonReentrant() {
         require(collateralAmount > 0, "Invalid collateral amount");
         DepositData storage fillRequestData = fillRequests[msg.sender];
@@ -152,9 +141,9 @@ contract OptimisticDex is Testable, Lockable {
         fillRequestData.fillToken = fillToken;
         fillRequestData.fillRequestAmount = fillRequestAmount;
         fillRequestData.chainId = chainId;
-        fillRequestData.recipient = msg.sender;
+        fillRequestData.recipient = recipient;
 
-        emit Deposit(msg.sender, collateralAmount, fillToken, fillRequestAmount, chainId);
+        emit Deposit(msg.sender, collateralAmount, fillToken, fillRequestAmount, chainId, recipient);
 
         // Move collateral currency from sender to contract.
         collateralCurrency.safeTransferFrom(msg.sender, address(this), collateralAmount);
