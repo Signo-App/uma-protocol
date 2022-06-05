@@ -165,7 +165,7 @@ contract OptimisticDex is Testable, Lockable {
     }
 
     // If you did a fill, you can delete a requested withdrawal and make your own withdrawal request.
-    function withdrawAfterFill(uint256 denominatedCollateralAmount, address depositor) public nonReentrant() {
+    function requestWithdrawAfterFill(uint256 denominatedCollateralAmount, address depositor) public nonReentrant() {
         OptimisticDexData storage fillRequestData = fillRequests[depositor];
         require(denominatedCollateralAmount > 0, "Invalid collateral amount");
 
