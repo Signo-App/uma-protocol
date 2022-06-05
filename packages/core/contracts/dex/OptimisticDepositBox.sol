@@ -208,13 +208,18 @@ contract OptimisticDex is Testable, Lockable {
         fillRequestData.collateral = fillRequestData.collateral.sub(amountFilled);
         totalOptimisticDexCollateral = totalOptimisticDexCollateral.sub(amountFilled);
 
-        emit RequestWithdrawalExecuted(msg.sender, amountFilled, depositor, fillRequestData.withdrawalRequestTimestamp);
+        emit RequestWithdrawalExecuted(
+            fillRequestData.recipient,
+            amountFilled,
+            depositor,
+            fillRequestData.withdrawalRequestTimestamp
+        );
 
         // Reset withdrawal request by setting withdrawal request timestamp to 0.
         _resetWithdrawalRequest(fillRequestData);
 
         // Transfer approved withdrawal amount from the contract to the caller.
-        collateralCurrency.safeTransfer(msg.sender, amountFilled);
+        collateralCurrency.safeTransfer(fillRequestData.recipient, amountFilled);
         return amountFilled;
     }
 
