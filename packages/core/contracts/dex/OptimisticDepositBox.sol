@@ -25,7 +25,7 @@ contract OptimisticDex is Testable, Lockable {
     using SafeERC20 for IERC20;
 
     // Represents a single depositor's deposit box. All collateral is held by this contract.
-    struct OptimisticDexData {
+    struct DepositData {
         address fillToken;
         uint256 fillRequestAmount;
         uint8 chainId;
@@ -49,7 +49,7 @@ contract OptimisticDex is Testable, Lockable {
     }
 
     // Maps addresses to their deposit boxes. Each address can have only one position.
-    mapping(address => OptimisticDexData) private fillRequests;
+    mapping(address => DepositData) private fillRequests;
 
     // Maps executed withdrawal requests so they can't be re-run.
     mapping(bytes32 => bool) completedFills;
@@ -142,7 +142,7 @@ contract OptimisticDex is Testable, Lockable {
         uint8 chainId
     ) public nonReentrant() {
         require(collateralAmount > 0, "Invalid collateral amount");
-        OptimisticDexData storage fillRequestData = fillRequests[msg.sender];
+        DepositData storage fillRequestData = fillRequests[msg.sender];
 
         // Increase the individual deposit box and global collateral balance by collateral amount.
         fillRequestData.collateral = fillRequestData.collateral.add(collateralAmount);
@@ -174,7 +174,7 @@ contract OptimisticDex is Testable, Lockable {
         noPendingWithdrawal(msg.sender)
         nonReentrant()
     {
-        OptimisticDexData storage fillRequestData = fillRequests[msg.sender];
+        DepositData storage fillRequestData = fillRequests[msg.sender];
         require(denominatedCollateralAmount > 0, "Invalid collateral amount");
 
         // Update the position data for the user.
@@ -192,7 +192,7 @@ contract OptimisticDex is Testable, Lockable {
     // If you did a fill, you can delete a requested withdrawal and make your own withdrawal request.
     // TODO: Allow withdrawal to a different address than msg.sender, specified in the OptimisticFill contract.
     function requestWithdrawalAfterFill(uint256 fillAmount, address depositor) public nonReentrant() {
-        OptimisticDexData storage fillRequestData = fillRequests[depositor];
+        DepositData storage fillRequestData = fillRequests[depositor];
         require(fillAmount > 0, "Invalid collateral amount");
 
         // Update the position data for the user.
@@ -215,7 +215,7 @@ contract OptimisticDex is Testable, Lockable {
      * @return amountWithdrawn The actual amount of collateral withdrawn.
      */
     function executeWithdrawal(address depositor) external nonReentrant() returns (uint256 amountWithdrawn) {
-        OptimisticDexData storage fillRequestData = fillRequests[depositor];
+        DepositData storage fillRequestData = fillRequests[depositor];
         require(
             fillRequestData.withdrawalRequestTimestamp != 0 &&
                 fillRequestData.withdrawalRequestTimestamp <= getCurrentTime(),
