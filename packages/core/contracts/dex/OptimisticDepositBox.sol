@@ -24,8 +24,20 @@ contract OptimisticDex is Testable, Lockable {
     using FixedPoint for FixedPoint.Unsigned;
     using SafeERC20 for IERC20;
 
-    // Represents a single caller's deposit box. All collateral is held by this contract.
+    // Represents a single depositor's deposit box. All collateral is held by this contract.
     struct OptimisticDexData {
+        address fillToken;
+        uint256 fillRequestAmount;
+        uint8 chainId;
+        // Timestamp of the latest withdrawal request. A withdrawal request is pending if `withdrawalRequestTimestamp != 0`.
+        uint256 withdrawalRequestTimestamp;
+        // Collateral value.
+        uint256 collateral;
+        address recipient;
+    }
+
+    // Represents a single fill withdrawal.
+    struct FillWithdrawal {
         address fillToken;
         uint256 fillRequestAmount;
         uint8 chainId;
@@ -38,6 +50,9 @@ contract OptimisticDex is Testable, Lockable {
 
     // Maps addresses to their deposit boxes. Each address can have only one position.
     mapping(address => OptimisticDexData) private fillRequests;
+
+    // Maps executed withdrawal requests so they can't be re-run.
+    mapping(bytes32 => bool) completedFills;
 
     // Unique identifier for price feed ticker.
     bytes32 private priceIdentifier;
@@ -204,9 +219,24 @@ contract OptimisticDex is Testable, Lockable {
         // Note that in practice, you may have to do some additional math here to deal with scaling in the oracle price.
         uint256 amountFilled = _getOraclePrice(fillRequestData.withdrawalRequestTimestamp, fillRequestData.recipient);
 
+        // Check that the fill withdrawal has not been executed already.
+        bytes32 fillHash =
+            keccak256(
+                abi.encode(
+                    fillRequestData.recipient,
+                    amountFilled,
+                    depositor,
+                    fillRequestData.withdrawalRequestTimestamp
+                )
+            );
+        require(completedFills[fillHash] == false, "Withdrawal already executed for this fill");
+
         // Decrease the individual deposit box and global collateral balance.
         fillRequestData.collateral = fillRequestData.collateral.sub(amountFilled);
         totalOptimisticDexCollateral = totalOptimisticDexCollateral.sub(amountFilled);
+
+        // Prevent duplicate withdrawals.
+        completedFills[fillHash] = true;
 
         emit RequestWithdrawalExecuted(
             fillRequestData.recipient,
@@ -214,8 +244,6 @@ contract OptimisticDex is Testable, Lockable {
             depositor,
             fillRequestData.withdrawalRequestTimestamp
         );
-
-        // TODO: Prevent duplicate withdrawals.
 
         // Transfer approved withdrawal amount from the contract to the caller.
         collateralCurrency.safeTransfer(fillRequestData.recipient, amountFilled);
