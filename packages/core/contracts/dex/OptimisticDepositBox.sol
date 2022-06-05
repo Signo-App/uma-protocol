@@ -42,6 +42,9 @@ contract OptimisticDex is Testable, Lockable {
     // Maps executed withdrawal requests so they can't be re-run.
     mapping(bytes32 => bool) completedFills;
 
+    // Maps depositor withdrawal requests to timestamp to not directly call oracle.
+    mapping(address => mapping(address => uint256)) withdrawalRequests;
+
     // Unique identifier for price feed ticker.
     bytes32 private priceIdentifier;
 
@@ -66,7 +69,12 @@ contract OptimisticDex is Testable, Lockable {
         uint8 chainId,
         address recipient
     );
-    event RequestWithdrawal(address indexed user, uint256 indexed collateralAmount, uint256 withdrawalRequestTimestamp);
+    event RequestWithdrawal(
+        address indexed user,
+        address indexed depositToken,
+        uint256 indexed collateralAmount,
+        uint256 withdrawalRequestTimestamp
+    );
     event RequestWithdrawalAfterFill(
         address indexed filler,
         address indexed depositor,
@@ -158,7 +166,7 @@ contract OptimisticDex is Testable, Lockable {
      * @param denominatedCollateralAmount the quote-asset denominated amount of collateral requested to
      * withdraw.
      */
-    function requestWithdrawal(uint256 denominatedCollateralAmount)
+    function requestWithdrawal(uint256 denominatedCollateralAmount, address depositToken)
         public
         noPendingWithdrawal(msg.sender)
         nonReentrant()
@@ -170,23 +178,32 @@ contract OptimisticDex is Testable, Lockable {
         fillRequestData.fillRequestAmount = denominatedCollateralAmount;
         fillRequestData.withdrawalRequestTimestamp = getCurrentTime();
 
-        emit RequestWithdrawal(msg.sender, denominatedCollateralAmount, fillRequestData.withdrawalRequestTimestamp);
+        emit RequestWithdrawal(
+            msg.sender,
+            depositToken,
+            denominatedCollateralAmount,
+            fillRequestData.withdrawalRequestTimestamp
+        );
 
-        // A price request is sent for the current timestamp.
-        _requestOraclePrice(fillRequestData.withdrawalRequestTimestamp, msg.sender);
-
-        // TODO: Don't call the oracle here, create request within contract and execute later in another function.
+        // Mark the timestamp of the withdrawal request.
+        withdrawalRequests[msg.sender][depositToken] = getCurrentTime();
     }
 
     // If you did a fill, you can delete a requested withdrawal and make your own withdrawal request.
     // TODO: Allow withdrawal to a different address than msg.sender, specified in the OptimisticFill contract.
-    function requestWithdrawalAfterFill(uint256 fillAmount, address depositor) public nonReentrant() {
+    function requestWithdrawalAfterFill(
+        uint256 fillAmount,
+        address depositor,
+        address depositToken
+    ) public nonReentrant() {
         DepositData storage fillRequestData = fillRequests[depositor];
         require(fillAmount > 0, "Invalid collateral amount");
 
         // Update the position data for the user.
         fillRequestData.fillRequestAmount = fillAmount;
         fillRequestData.withdrawalRequestTimestamp = getCurrentTime();
+
+        withdrawalRequests[msg.sender][depositToken] = 0;
 
         emit RequestWithdrawalAfterFill(msg.sender, depositor, fillAmount, fillRequestData.withdrawalRequestTimestamp);
 
