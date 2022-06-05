@@ -62,6 +62,12 @@ contract OptimisticDex is Testable, Lockable {
         uint8 chainId
     );
     event RequestWithdrawal(address indexed user, uint256 indexed collateralAmount, uint256 withdrawalRequestTimestamp);
+    event RequestWithdrawalAfterFill(
+        address indexed filler,
+        address indexed depositor,
+        uint256 indexed collateralAmount,
+        uint256 withdrawalRequestTimestamp
+    );
     event RequestWithdrawalExecuted(
         address indexed filler,
         uint256 indexed amountFilled,
@@ -165,15 +171,15 @@ contract OptimisticDex is Testable, Lockable {
     }
 
     // If you did a fill, you can delete a requested withdrawal and make your own withdrawal request.
-    function requestWithdrawAfterFill(uint256 denominatedCollateralAmount, address depositor) public nonReentrant() {
+    function requestWithdrawAfterFill(uint256 fillAmount, address depositor) public nonReentrant() {
         OptimisticDexData storage fillRequestData = fillRequests[depositor];
-        require(denominatedCollateralAmount > 0, "Invalid collateral amount");
+        require(fillAmount > 0, "Invalid collateral amount");
 
         // Update the position data for the user.
-        fillRequestData.fillRequestAmount = denominatedCollateralAmount;
+        fillRequestData.fillRequestAmount = fillAmount;
         fillRequestData.withdrawalRequestTimestamp = getCurrentTime();
 
-        emit RequestWithdrawal(msg.sender, denominatedCollateralAmount, fillRequestData.withdrawalRequestTimestamp);
+        emit RequestWithdrawalAfterFill(msg.sender, depositor, fillAmount, fillRequestData.withdrawalRequestTimestamp);
 
         // A price request is sent for the current timestamp.
         _requestOraclePrice(fillRequestData.withdrawalRequestTimestamp, depositor);
