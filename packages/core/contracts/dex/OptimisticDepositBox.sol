@@ -183,7 +183,11 @@ contract OptimisticDex is Testable, Lockable {
 
         // A price request is sent for the current timestamp.
         _requestOraclePrice(fillRequestData.withdrawalRequestTimestamp, msg.sender);
+
+        // TODO: Request and propose at the same time.
     }
+
+    // TODO: Have a function to cancel a deposit and be able to withdraw.
 
     // If you did a fill, you can delete a requested withdrawal and make your own withdrawal request.
     function requestWithdrawalAfterFill(uint256 fillAmount, address depositor) public nonReentrant() {
@@ -198,6 +202,8 @@ contract OptimisticDex is Testable, Lockable {
 
         // A price request is sent for the current timestamp.
         _requestOraclePrice(fillRequestData.withdrawalRequestTimestamp, depositor);
+
+        // TODO: Request and propose at the same time.
     }
 
     /**
