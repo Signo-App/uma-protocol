@@ -215,8 +215,7 @@ contract OptimisticDex is Testable, Lockable {
             fillRequestData.withdrawalRequestTimestamp
         );
 
-        // Reset withdrawal request by setting withdrawal request timestamp to 0.
-        _resetWithdrawalRequest(fillRequestData);
+        // TODO: Prevent duplicate withdrawals.
 
         // Transfer approved withdrawal amount from the contract to the caller.
         collateralCurrency.safeTransfer(fillRequestData.recipient, amountFilled);
@@ -241,11 +240,6 @@ contract OptimisticDex is Testable, Lockable {
         OptimisticOracleInterface oracle = _getOptimisticOracle();
         // For other use cases, you may need ancillary data or a reward. Here, they are both zero.
         oracle.requestPrice(priceIdentifier, requestedTime, abi.encode(recipient), IERC20(collateralCurrency), 0);
-    }
-
-    function _resetWithdrawalRequest(OptimisticDexData storage fillRequestData) internal {
-        fillRequestData.fillRequestAmount = 0;
-        fillRequestData.withdrawalRequestTimestamp = 0;
     }
 
     function _fillRequestHasNoPendingWithdrawal(address user) internal view {
