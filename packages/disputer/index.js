@@ -74,11 +74,13 @@ async function run({
       proxyTransactionWrapperConfig,
     });
 
+    await web3.eth.net.getId();
+
     // Load unlocked web3 accounts and get the networkId.
     const [detectedContract, accounts, networkId] = await Promise.all([
       findContractVersion(financialContractAddress, web3),
       web3.eth.getAccounts(),
-      42,
+      web3.eth.net.getId(),
     ]);
 
     const networkName = PublicNetworks[Number(networkId)] ? PublicNetworks[Number(networkId)].name : null;
