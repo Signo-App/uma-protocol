@@ -1,5 +1,14 @@
 {
-  "BTC/USD": {},
+  "BTC/USD": {
+    "type": "medianizer",
+    "invertPrice": false,
+    "minTimeBetweenUpdates": 60,
+    "medianizedFeeds": [
+      { "type": "cryptowatch", "exchange": "coinbase-pro", "pair": "btcusd" },
+      { "type": "cryptowatch", "exchange": "binance", "pair": "btcusdt" },
+      { "type": "cryptowatch", "exchange": "bitstamp", "pair": "btcusd" }
+    ]
+  },
   "USD/BTC": {},
   "ETH/USD": {},
   "CMC Total Market Cap": {},
