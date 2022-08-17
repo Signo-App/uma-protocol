@@ -36,7 +36,7 @@ export class MarketStackPriceFeed extends PriceFeedInterface {
     private readonly minTimeBetweenUpdates = 43200 // 12 hours is a reasonable default since this pricefeed returns daily granularity at best.
   ) {
     super();
-    console.log('constructing');
+    console.log('apikey', apiKey, this.apiKey);
 
     this.uuid = `MarketStack-${symbolString}`;
 
@@ -48,8 +48,6 @@ export class MarketStackPriceFeed extends PriceFeedInterface {
       // Note: Must ensure that `number` has no more decimal places than `priceFeedDecimals`.
       return Web3.utils.toBN(parseFixed(number.toString().substring(0, priceFeedDecimals), priceFeedDecimals).toString());
     };
-
-    throw "too scared to go further :3";
   }
   // Updates the internal state of the price feed. Should pull in any async data so the get*Price methods can be called.
   // Will use the optional ancillary data parameter to customize what kind of data get*Price returns.
@@ -88,21 +86,21 @@ export class MarketStackPriceFeed extends PriceFeedInterface {
     const url =
       "https://api.marketstack.com/v1/eod?" +
       `symbols=${this.symbolString}&access_key=${this.apiKey}` +
-      `date_from=${startDateString}&date_to=${endDateString}` ;
+      `&date_from=${startDateString}&date_to=${endDateString}` ;
     
     // 2. Send request.
     const historyResponse = await this.networker.getJson(url);
 
     // 3. Check responses.
     if (
-      !historyResponse?.data ||
+      !(historyResponse?.data) ||
       historyResponse.data.length === 0
     ) {
       throw new Error(`🚨Could not parse price result from url ${url}: ${JSON.stringify(historyResponse)}`);
     }
 
     // 4. Parse results.
-    const newHistoricalPricePeriods = historyResponse.dataset_data.data
+    const newHistoricalPricePeriods = historyResponse.data
       .map((dailyData: any) => ({
         date: this._dateTimeToSecond(dailyData.date),
         openPrice: this.convertPriceFeedDecimals(dailyData.open)
@@ -116,6 +114,9 @@ export class MarketStackPriceFeed extends PriceFeedInterface {
     this.currentPrice = newHistoricalPricePeriods[newHistoricalPricePeriods.length - 1].openPrice;
     this.priceHistory = newHistoricalPricePeriods;
     this.lastUpdateTime = currentTime;
+
+    console.log('done with update. Results:', this.currentPrice, this.priceHistory[0].openPrice.toString(), this.lastUpdateTime);
+    throw "lol nah";
   }
 
   // Gets the current price (as a BN) for this feed synchronously from the in-memory state of this price feed object.
