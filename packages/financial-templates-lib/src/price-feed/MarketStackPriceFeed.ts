@@ -119,24 +119,66 @@ export class MarketStackPriceFeed extends PriceFeedInterface {
     throw "lol nah";
   }
 
-  // Gets the current price (as a BN) for this feed synchronously from the in-memory state of this price feed object.
-  // This price should be up-to-date as of the last time that `update(ancillaryData)` was called, using any parameters
-  // specified in the ancillary data passed as input. If `update()` has never been called, this should return `null` or
-  // `undefined`. If no price could be retrieved, it should return `null` or `undefined`.
-  // Note: derived classes *must* override this method.
   public getCurrentPrice(): BN | null {
     return this.currentPrice;
   }
 
-  // Gets the price (as a BN) for the time (+ ancillary data) specified. Similar to `getCurrentPrice()`, the price is
-  // derived from the in-memory state of the price feed object, so this method is synchronous. This price should be
-  // up-to-date as of the last time `update()` was called. If `update()` has never been called, this should throw. If
-  // the time is before the pre-determined historical lookback window of this PriceFeed object, then this method should
-  // throw. If the historical price could not be computed for any other reason, this method
-  // should throw.
-  // Note: derived classes *must* override this method.
   public async getHistoricalPrice(time: number, ancillaryData?: string, verbose?: boolean): Promise<BN | null> {
-    return this.currentPrice;
+    if (this.lastUpdateTime === undefined) {
+      throw new Error(`${this.uuid}: undefined lastUpdateTime`);
+    }
+
+    // Set first price period in `historicalPricePeriods` to first non-null price.
+    let firstPrice;
+    for (const p in this.priceHistory) {
+      if (this.priceHistory[p] && this.priceHistory[p].date) {
+        firstPrice = this.priceHistory[p];
+        break;
+      }
+    }
+
+    // If there are no valid price periods, return null.
+    if (!firstPrice) {
+      throw new Error(`${this.uuid}: no valid price periods`);
+    }
+
+    // If the time is before the first piece of data in the set, return null because
+    // the price is before the lookback window.
+    if (time < firstPrice.date) {
+      throw new Error(`${this.uuid}: time ${time} is before firstPricePeriod.openTime`);
+    }
+
+    // historicalPricePeriods are ordered from oldest to newest.
+    // This finds the first pricePeriod whose closeTime is after the provided time.
+    const match = this.priceHistory.find((pricePeriod) => {
+      return time < pricePeriod.date;
+    });
+
+    // If there is no match, that means that the time was past the last data point.
+    // In this case, the best match for this price is the current price.
+    let returnPrice;
+    if (match === undefined) {
+      if (this.currentPrice === null) throw new Error(`${this.uuid}: currentPrice is null`);
+      returnPrice = this.currentPrice;
+      if (verbose) {
+        console.group(`\n(${this.symbolString}) No price available @ ${time}`);
+        console.log(
+          `- ✅ Time is later than earliest historical time, fetching current price: ${Web3.utils.fromWei(
+            returnPrice.toString()
+          )}`
+        );
+        console.groupEnd();
+      }
+      return returnPrice;
+    }
+
+    returnPrice = match.openPrice;
+    if (verbose) {
+      console.group(`\n(${this.symbolString}) Historical price @ ${match.date}`);
+      console.log(`- ✅ Open Price:${Web3.utils.fromWei(returnPrice.toString())}`);
+      console.groupEnd();
+    }
+    return returnPrice;
   }
 
   public getLastUpdateTime(): number | null {
