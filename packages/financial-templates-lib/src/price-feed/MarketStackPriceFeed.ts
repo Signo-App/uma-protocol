@@ -114,9 +114,6 @@ export class MarketStackPriceFeed extends PriceFeedInterface {
     this.currentPrice = newHistoricalPricePeriods[newHistoricalPricePeriods.length - 1].openPrice;
     this.priceHistory = newHistoricalPricePeriods;
     this.lastUpdateTime = currentTime;
-
-    console.log('done with update. Results:', this.currentPrice, this.priceHistory[0].openPrice.toString(), this.lastUpdateTime);
-    throw "lol nah";
   }
 
   public getCurrentPrice(): BN | null {
