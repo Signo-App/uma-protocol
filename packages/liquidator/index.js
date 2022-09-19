@@ -83,9 +83,17 @@ async function run({
 
     await web3.eth.net.getId();
 
+    const getDetectedContract = async () => {
+      return {
+        // Goerli - Sumero Forked EMP Contract
+        contractType: "ExpiringMultiParty",
+        contractVersion: "2.0.1",
+      }
+    }
+
     // Load unlocked web3 accounts and get the networkId.
     const [detectedContract, accounts, networkId] = await Promise.all([
-      findContractVersion(financialContractAddress, web3),
+      getDetectedContract(),
       web3.eth.getAccounts(),
       web3.eth.net.getId(),
     ]);
@@ -135,9 +143,8 @@ async function run({
       ) {
         logger.info({
           at: "Liquidator#index",
-          message: `Financial Contract is ${
-            liquidatorConfig.contractType === "ExpiringMultiParty" ? "expired" : "shutdown"
-          }, can only withdraw liquidator dispute rewards 🕰`,
+          message: `Financial Contract is ${liquidatorConfig.contractType === "ExpiringMultiParty" ? "expired" : "shutdown"
+            }, can only withdraw liquidator dispute rewards 🕰`,
           expirationOrShutdownTimestamp,
           contractTimestamp,
         });
@@ -296,7 +303,7 @@ async function run({
     }
 
     // Create a execution loop that will run indefinitely (or yield early if in serverless mode)
-    for (;;) {
+    for (; ;) {
       // Check if Financial Contract expired before running current iteration.
       let isExpiredOrShutdown = await checkIsExpiredOrShutdownPromise();
 
@@ -432,7 +439,7 @@ function nodeCallback(err) {
 // If called directly by node, execute the Poll Function. This lets the script be run as a node process.
 if (require.main === module) {
   Poll(nodeCallback)
-    .then(() => {})
+    .then(() => { })
     .catch(nodeCallback);
 }
 
