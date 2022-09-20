@@ -49,9 +49,14 @@ export class StLouisFedGovPriceFeed extends PriceFeedInterface {
     };
   }
   private async _getHistoricalPrice(time: number) : Promise<BN | null> {
-    const dataFetchStartTime = time - (60*60*24*60) // good guarantee to get at least 1 data point
+    const dataFetchStartTime = time - (60*60*24*60) // good guarantee to get at least 1 data point, assuming monthly data points
 
+    // dataFetchStart gives an "early bound" to our data
     const dataFetchStartString = this._secondToDateTime(dataFetchStartTime);
+
+    // realtimeEndString is essentially specifying when in history to "look from", i.e. what did the data look like at a specific time?
+    // This is because these data can change and be revised. We want to stay true to what operators/users knew at the time.
+    // see https://fred.stlouisfed.org/docs/api/fred/realtime_period.html
     const realtimeEndString = this._secondToDateTime(time);
 
     const url =
@@ -78,12 +83,10 @@ export class StLouisFedGovPriceFeed extends PriceFeedInterface {
       });
     
     return observations[observations.length-1].price;
-    // return this.convertPriceFeedDecimals(1000);
   }
-  // Updates the internal state of the price feed. Should pull in any async data so the get*Price methods can be called.
-  // Will use the optional ancillary data parameter to customize what kind of data get*Price returns.
-  // Note: derived classes *must* override this method.
-  // Note: Eventually `update` will be removed in favor of folding its logic into `getCurrentPrice`.
+  // Most price feeds should update the current time and historical time, and "getter" functions then retrieve this
+  // However, due to the way the api returns data, this is an infeasible approach for historical data.
+  // Thus this function just updates the current time.
   public async update(ancillaryData?: string): Promise<void> {
     const currentTime = await this.getTime();
 
@@ -113,7 +116,9 @@ export class StLouisFedGovPriceFeed extends PriceFeedInterface {
   public getCurrentPrice(): BN | null {
     return this.currentPrice;
   }
-
+  // For most price feeds, getHistoricalPrice should be a local getter, which just returns cached data found during update()
+  // However, due to the way the api returns data, this is an infeasible approach for historical data.
+  // Thus this function performs the fetch in real-time.
   public async getHistoricalPrice(time: number, ancillaryData?: string, verbose?: boolean): Promise<BN | null> {
     const returnPrice = this._getHistoricalPrice(time);
 
