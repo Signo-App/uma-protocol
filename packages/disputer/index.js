@@ -76,13 +76,17 @@ async function run({
 
     await web3.eth.net.getId();
 
-    // Load unlocked web3 accounts and get the networkId.
-    const [detectedContract, accounts, networkId] = await Promise.all([
-      {
-        // 2.0.1 Mainnet ExpiringMultiParty.
+    const spoofContractVersion = async () => {
+      return {
+        // Goerli - Sumero Forked EMP Contract
         contractType: "ExpiringMultiParty",
         contractVersion: "2.0.1",
-      },
+      }
+    }
+
+    // Load unlocked web3 accounts and get the networkId.
+    const [detectedContract, accounts, networkId] = await Promise.all([
+      spoofContractVersion(),
       web3.eth.getAccounts(),
       web3.eth.net.getId(),
     ]);
@@ -227,7 +231,7 @@ async function run({
         });
     }
     // Create a execution loop that will run indefinitely (or yield early if in serverless mode)
-    for (;;) {
+    for (; ;) {
       await retry(
         async () => {
           await disputer.update();
@@ -338,7 +342,7 @@ function nodeCallback(err) {
 // If called directly by node, execute the Poll Function. This lets the script be run as a node process.
 if (require.main === module) {
   Poll(nodeCallback)
-    .then(() => {})
+    .then(() => { })
     .catch(nodeCallback);
 }
 
