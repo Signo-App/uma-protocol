@@ -36,7 +36,6 @@ export class StLouisFedGovPriceFeed extends PriceFeedInterface {
     private readonly minTimeBetweenUpdates = 43200 // 12 hours is a reasonable default since this pricefeed returns daily granularity at best.
   ) {
     super();
-    console.log('apikey', apiKey, this.apiKey);
 
     this.uuid = `StLouisFedGov-${symbolString}`;
 
@@ -79,6 +78,7 @@ export class StLouisFedGovPriceFeed extends PriceFeedInterface {
       });
     
     return observations[observations.length-1].price;
+    // return this.convertPriceFeedDecimals(1000);
   }
   // Updates the internal state of the price feed. Should pull in any async data so the get*Price methods can be called.
   // Will use the optional ancillary data parameter to customize what kind of data get*Price returns.

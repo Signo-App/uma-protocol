@@ -36,7 +36,6 @@ export class MarketStackPriceFeed extends PriceFeedInterface {
     private readonly minTimeBetweenUpdates = 43200 // 12 hours is a reasonable default since this pricefeed returns daily granularity at best.
   ) {
     super();
-    console.log('apikey', apiKey, this.apiKey);
 
     this.uuid = `MarketStack-${symbolString}`;
 
