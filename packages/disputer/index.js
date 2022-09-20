@@ -78,7 +78,11 @@ async function run({
 
     // Load unlocked web3 accounts and get the networkId.
     const [detectedContract, accounts, networkId] = await Promise.all([
-      findContractVersion(financialContractAddress, web3),
+      {
+        // 2.0.1 Mainnet ExpiringMultiParty.
+        contractType: "ExpiringMultiParty",
+        contractVersion: "2.0.1",
+      },
       web3.eth.getAccounts(),
       web3.eth.net.getId(),
     ]);
