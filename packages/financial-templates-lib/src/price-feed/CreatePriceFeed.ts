@@ -30,6 +30,7 @@ import { UniswapV2PriceFeed, UniswapV3PriceFeed } from "./UniswapPriceFeed";
 import { VaultPriceFeed, HarvestVaultPriceFeed } from "./VaultPriceFeed";
 import { InsuredBridgePriceFeed } from "./InsuredBridgePriceFeed";
 import { USPACPriceFeed } from "./USPACPriceFeed";
+import { MarketStackPriceFeed } from "./MarketStackPriceFeed";
 
 import type { Logger } from "winston";
 import { NetworkerInterface } from "./Networker";
@@ -37,6 +38,7 @@ import { PriceFeedInterface } from "./PriceFeedInterface";
 import { isDefined } from "../types";
 import { InsuredBridgeL1Client, InsuredBridgeL2Client } from "..";
 import type { BlockTransactionBase } from "web3-eth";
+import { StLouisFedGovPriceFeed } from "./StLouisFedGovPriceFeed";
 
 interface Block {
   number: number;
@@ -514,6 +516,44 @@ export async function createPriceFeed(
       config.correctionFactor,
       config.rapidApiKey,
       config.interval,
+      config.lookback,
+      networker,
+      getTime,
+      config.priceFeedDecimals,
+      config.minTimeBetweenUpdates
+    );
+  } else if (config.type === "marketstack") {
+    const requiredFields = ["lookback", "symbolString", "apiKey"];
+
+    if (isMissingField(config, requiredFields, logger)) {
+      return null;
+    }
+
+    logger.debug({at: "createPriceFeed", message: "Creating MarketStackPriceFeed", config });
+
+    return new MarketStackPriceFeed(
+      logger,
+      config.symbolString,
+      config.apiKey,
+      config.lookback,
+      networker,
+      getTime,
+      config.priceFeedDecimals,
+      config.minTimeBetweenUpdates
+    );
+  } else if (config.type === "stlouisfedgov") {
+    const requiredFields = ["lookback", "symbolString", "apiKey"];
+
+    if (isMissingField(config, requiredFields, logger)) {
+      return null;
+    }
+
+    logger.debug({at: "createPriceFeed", message: "Creating StLouisFedGovPriceFeed", config });
+
+    return new StLouisFedGovPriceFeed(
+      logger,
+      config.symbolString,
+      config.apiKey,
       config.lookback,
       networker,
       getTime,

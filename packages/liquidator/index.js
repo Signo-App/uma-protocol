@@ -83,7 +83,7 @@ async function run({
 
     await web3.eth.net.getId();
 
-    const getDetectedContract = async () => {
+    const spoofContractVersion = async () => {
       return {
         // Goerli - Sumero Forked EMP Contract
         contractType: "ExpiringMultiParty",
@@ -93,16 +93,12 @@ async function run({
 
     // Load unlocked web3 accounts and get the networkId.
     const [detectedContract, accounts, networkId] = await Promise.all([
-      getDetectedContract(),
+      spoofContractVersion(),
       web3.eth.getAccounts(),
       web3.eth.net.getId(),
     ]);
 
-    console.log("DEBUG: accounts ", accounts);
-    console.log("DEBUG: getId ", networkId);
-
     const networkName = PublicNetworks[Number(networkId)] ? PublicNetworks[Number(networkId)].name : null;
-    console.log("DEBUG: networkName ", networkName);
 
     // Append the contract version and type to the liquidatorConfig, if the liquidatorConfig does not already contain one.
     if (!liquidatorConfig) liquidatorConfig = {};
