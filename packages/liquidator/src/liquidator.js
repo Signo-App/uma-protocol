@@ -414,14 +414,20 @@ class Liquidator {
           settlementPrice: receipt.events.LiquidationWithdrawn.returnValues.settlementPrice,
           liquidationStatus:
             PostWithdrawLiquidationRewardsStatusTranslations[
-              receipt.events.LiquidationWithdrawn.returnValues.liquidationStatus
+            receipt.events.LiquidationWithdrawn.returnValues.liquidationStatus
             ],
         };
 
         // Returns an object containing all payouts.
-        logResult.paidToLiquidator = receipt.events.LiquidationWithdrawn.returnValues.paidToLiquidator;
-        logResult.paidToDisputer = receipt.events.LiquidationWithdrawn.returnValues.paidToDisputer;
-        logResult.paidToSponsor = receipt.events.LiquidationWithdrawn.returnValues.paidToSponsor;
+        //--------- removed variable
+
+        //  logResult.paidToLiquidator = receipt.events.LiquidationWithdrawn.returnValues.paidToLiquidator;
+        //--------- removed variable
+
+        //   logResult.paidToDisputer = receipt.events.LiquidationWithdrawn.returnValues.paidToDisputer;
+        //--------- removed variable
+
+        //   logResult.paidToSponsor = receipt.events.LiquidationWithdrawn.returnValues.paidToSponsor;
 
         this.logger.info({
           at: "Liquidator",
