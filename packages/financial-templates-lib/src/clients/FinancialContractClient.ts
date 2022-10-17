@@ -335,10 +335,7 @@ export class FinancialContractClient {
         numTokens: position.tokensOutstanding.toString(), // This represents the actual amount of tokens outstanding
         // for a sponsor and is the maximum amount of tokens needed to fully liquidate a position. The liquidator bot
         // therefore can liquidate up to this amount of tokens.
-        amountCollateral: this.toBN(position.rawCollateral.toString())
-          .mul(this.toBN(1))
-          .div(this.fixedPointAdjustment)
-          .toString(),
+        amountCollateral: this.toBN(position.rawCollateral.toString()).toString(),
         // Applies the current outstanding fees to collateral.
         hasPendingWithdrawal: parseInt(position.withdrawalRequestPassTimestamp) > 0,
       };
