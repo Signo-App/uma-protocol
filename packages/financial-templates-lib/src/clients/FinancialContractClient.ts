@@ -56,7 +56,6 @@ export class FinancialContractClient {
   private expiredLiquidations: Liquidation[] = [];
   private disputedLiquidations: Liquidation[] = [];
   private collateralRequirement: BN | undefined;
-  private cumulativeFeeMultiplier: undefined | BN;
   private liquidationLiveness: undefined | number;
   private readonly fixedPointAdjustment: BN;
 
@@ -178,19 +177,17 @@ export class FinancialContractClient {
   }
 
   async initialSetup(): Promise<void> {
-    const [collateralRequirement, liquidationLiveness, cumulativeFeeMultiplier] = await BluebirdPromise.all([
+    const [collateralRequirement, liquidationLiveness] = await BluebirdPromise.all([
       this.financialContract.methods.collateralRequirement().call(),
       this.financialContract.methods.liquidationLiveness().call(),
-      this.financialContract.methods.cumulativeFeeMultiplier().call(),
     ]);
     this.collateralRequirement = this.toBN(collateralRequirement.toString());
     this.liquidationLiveness = Number(liquidationLiveness);
-    this.cumulativeFeeMultiplier = this.toBN(cumulativeFeeMultiplier.toString());
   }
 
   async update(): Promise<void> {
     // If it is the first run then get contract contestants. This only needs to be called once.
-    if (!this.collateralRequirement || !this.liquidationLiveness || !this.cumulativeFeeMultiplier) {
+    if (!this.collateralRequirement || !this.liquidationLiveness) {
       await this.initialSetup();
     }
     // Fetch contract state variables in parallel.
@@ -320,7 +317,7 @@ export class FinancialContractClient {
     this.disputedLiquidations = disputedLiquidations;
 
     this.positions = activePositions.map((position, index) => {
-      if (!isDefined(this.latestCumulativeFundingRateMultiplier) || !isDefined(this.cumulativeFeeMultiplier))
+      if (!isDefined(this.latestCumulativeFundingRateMultiplier))
         throw new Error("initialSetup hasn't been called");
 
       return {
@@ -338,10 +335,7 @@ export class FinancialContractClient {
         numTokens: position.tokensOutstanding.toString(), // This represents the actual amount of tokens outstanding
         // for a sponsor and is the maximum amount of tokens needed to fully liquidate a position. The liquidator bot
         // therefore can liquidate up to this amount of tokens.
-        amountCollateral: this.toBN(position.rawCollateral.toString())
-          .mul(this.cumulativeFeeMultiplier)
-          .div(this.fixedPointAdjustment)
-          .toString(),
+        amountCollateral: this.toBN(position.rawCollateral.toString()).toString(),
         // Applies the current outstanding fees to collateral.
         hasPendingWithdrawal: parseInt(position.withdrawalRequestPassTimestamp) > 0,
       };
