@@ -39,6 +39,7 @@ import { isDefined } from "../types";
 import { InsuredBridgeL1Client, InsuredBridgeL2Client } from "..";
 import type { BlockTransactionBase } from "web3-eth";
 import { StLouisFedGovPriceFeed } from "./StLouisFedGovPriceFeed";
+import { CommoditiesApiPriceFeed } from "./CommoditiesApiPriceFeed";
 
 interface Block {
   number: number;
@@ -529,7 +530,7 @@ export async function createPriceFeed(
       return null;
     }
 
-    logger.debug({at: "createPriceFeed", message: "Creating MarketStackPriceFeed", config });
+    logger.debug({ at: "createPriceFeed", message: "Creating MarketStackPriceFeed", config });
 
     return new MarketStackPriceFeed(
       logger,
@@ -548,10 +549,31 @@ export async function createPriceFeed(
       return null;
     }
 
-    logger.debug({at: "createPriceFeed", message: "Creating StLouisFedGovPriceFeed", config });
+    logger.debug({ at: "createPriceFeed", message: "Creating StLouisFedGovPriceFeed", config });
 
     return new StLouisFedGovPriceFeed(
       logger,
+      config.symbolString,
+      config.apiKey,
+      config.lookback,
+      networker,
+      getTime,
+      config.priceFeedDecimals,
+      config.minTimeBetweenUpdates
+    );
+  } else if (config.type === "commodities-api") {
+    const requiredFields = ["lookback", "baseCurrency", "commodity", "symbolString", "apiKey"];
+
+    if (isMissingField(config, requiredFields, logger)) {
+      return null;
+    }
+
+    logger.debug({ at: "createPriceFeed", message: "Creating CommoditiesApiPriceFeed", config });
+
+    return new CommoditiesApiPriceFeed(
+      logger,
+      config.baseCurrency,
+      config.commodity,
       config.symbolString,
       config.apiKey,
       config.lookback,
