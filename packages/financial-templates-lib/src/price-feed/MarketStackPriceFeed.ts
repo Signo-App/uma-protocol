@@ -25,7 +25,7 @@ export class MarketStackPriceFeed extends PriceFeedInterface {
    * @param {Integer} minTimeBetweenUpdates Min number of seconds between updates. If update() is called again before
    *      this number of seconds has passed, it will be a no-op.
    */
-   constructor(
+  constructor(
     private readonly logger: Logger,
     private readonly symbolString: String,
     private readonly apiKey: string,
@@ -85,8 +85,8 @@ export class MarketStackPriceFeed extends PriceFeedInterface {
     const url =
       "https://api.marketstack.com/v1/eod?" +
       `symbols=${this.symbolString}&access_key=${this.apiKey}` +
-      `&date_from=${startDateString}&date_to=${endDateString}` ;
-    
+      `&date_from=${startDateString}&date_to=${endDateString}`;
+
     // 2. Send request.
     const historyResponse = await this.networker.getJson(url);
 
@@ -108,7 +108,7 @@ export class MarketStackPriceFeed extends PriceFeedInterface {
         // Sorts the data such that the oldest elements come first.
         return a.date - b.date;
       });
-    
+
     // 5. Store results.
     this.currentPrice = newHistoricalPricePeriods[newHistoricalPricePeriods.length - 1].openPrice;
     this.priceHistory = newHistoricalPricePeriods;
