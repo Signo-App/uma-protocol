@@ -9,7 +9,7 @@ import Web3 from "web3";
 export class CommoditiesApiPriceFeed extends PriceFeedInterface {
   private readonly uuid: string;
   private readonly convertPriceFeedDecimals: (number: number | string | BN) => BN;
-  private priceHistory: { date: number; openPrice: BN }[];
+  private priceHistory: any;
   private currentPrice: BN | null = null;
   private lastUpdateTime: number | null = null;
 
@@ -18,7 +18,6 @@ export class CommoditiesApiPriceFeed extends PriceFeedInterface {
    * @param {Object} logger Winston module used to send logs.
    * @param {String} baseCurrency currency to show price in i.e. "USD"
    * @param {String} commodity commodity symbol i.e. "XAU"
-   * @param {String} symbolString String used in query to fetch data, i.e. "XAUUSD"
    * @param {String} apiKey apiKey for Commodities api
    * @param {Integer} lookback How far in the past the historical prices will be available using getHistoricalPrice.
    * @param {Object} networker Used to send the API requests.
@@ -31,7 +30,6 @@ export class CommoditiesApiPriceFeed extends PriceFeedInterface {
     private readonly logger: Logger,
     private readonly baseCurrency: String,
     private readonly commodity: String,
-    private readonly symbolString: String,
     private readonly apiKey: string,
     private readonly lookback: number,
     private readonly networker: NetworkerInterface,
@@ -41,9 +39,9 @@ export class CommoditiesApiPriceFeed extends PriceFeedInterface {
   ) {
     super();
 
-    this.uuid = `CommoditiesApi-${symbolString}`;
+    this.uuid = `CommoditiesApi-${commodity}${baseCurrency}`;
 
-    this.priceHistory = [];
+    this.priceHistory = {};
 
     this.convertPriceFeedDecimals = (number) => {
       // Converts price result to wei
@@ -86,12 +84,6 @@ export class CommoditiesApiPriceFeed extends PriceFeedInterface {
 
     // 1. Construct URL.
     // See https://commodities-api.com/documentation
-    // XAUUSD
-    // commodity + baseCurrency
-    // https://commodities-api.com/api/2022-06-01
-    // ? access_key = API_KEYk
-    // & base = USD
-    // & symbols = CORN
     const url =
       "https://commodities-api.com/api/timeseries" +
       `?access_key=${this.apiKey}` +
@@ -108,28 +100,34 @@ export class CommoditiesApiPriceFeed extends PriceFeedInterface {
     console.log("DEBUG-comm: ", historyResponse);
 
     // 3. Check responses.
-    // if (
-    //   !(historyResponse?.data) ||
-    //   historyResponse.data.length === 0
-    // ) {
-    //   throw new Error(`🚨Could not parse price result from url ${url}: ${JSON.stringify(historyResponse)}`);
-    // }
+    if (
+      !(historyResponse?.data) ||
+      historyResponse.data.length === 0
+    ) {
+      throw new Error(`🚨Could not parse price result from url ${url}: ${JSON.stringify(historyResponse)}`);
+    }
 
-    // // 4. Parse results.
-    // const newHistoricalPricePeriods = historyResponse.data
-    //   .map((dailyData: any) => ({
-    //     date: this._dateTimeToSecond(dailyData.date),
-    //     openPrice: this.convertPriceFeedDecimals(dailyData.open)
-    //   }))
-    //   .sort((a: any, b: any) => {
-    //     // Sorts the data such that the oldest elements come first.
-    //     return a.date - b.date;
-    //   });
+    // 4. Parse results.
+    // historyResponse.data.rates -> {{"YYYY-MM-DD":{"commodity": value, "baseCurrency": value}}, ..}
+    // @ts-ignore
+    const newHistoricalPricePeriods = Object.entries(historyResponse.data.rates).map((e) => (Object.assign(e[1],
+      { "date": this._dateTimeToSecond(e[0]) }
+    )));
+    // newHistoricalPricePeriods -> [{"commodity": value, "baseCurrency": value, date: "YYYY-MM-DD"}, ..]
 
-    // // 5. Store results.
-    // this.currentPrice = newHistoricalPricePeriods[newHistoricalPricePeriods.length - 1].openPrice;
-    // this.priceHistory = newHistoricalPricePeriods;
-    // this.lastUpdateTime = currentTime;
+    // 5. Store results.
+    this.currentPrice = this.getHistoricalPrice(currentTime);
+    this.priceHistory = newHistoricalPricePeriods;
+    this.lastUpdateTime = currentTime;
+  }
+
+  /**
+   * 
+   * @param rate {"YYYY-MM-DD":{"commodity": number, "baseCurrency": number}
+   * @returns number
+   */
+  private _getPriceFromObject(rate) {
+    return rate[this.baseCurrency.toUpperCase()] / rate[this.commodity.toUpperCase()];
   }
 
   public getCurrentPrice(): BN | null {
@@ -137,61 +135,61 @@ export class CommoditiesApiPriceFeed extends PriceFeedInterface {
   }
 
   public async getHistoricalPrice(time: number, ancillaryData?: string, verbose?: boolean): Promise<BN | null> {
-    // if (this.lastUpdateTime === undefined) {
-    //   throw new Error(`${this.uuid}: undefined lastUpdateTime`);
-    // }
+    if (this.lastUpdateTime === undefined) {
+      throw new Error(`${this.uuid}: undefined lastUpdateTime`);
+    }
 
-    // // Set first price period in `historicalPricePeriods` to first non-null price.
-    // let firstPrice;
-    // for (const p in this.priceHistory) {
-    //   if (this.priceHistory[p] && this.priceHistory[p].date) {
-    //     firstPrice = this.priceHistory[p];
-    //     break;
-    //   }
-    // }
+    // Set first price period in `historicalPricePeriods` to first non-null price.
+    let firstPrice;
+    for (const p in this.priceHistory) {
+      if (this.priceHistory[p] && this.priceHistory[p][this.baseCurrency.toUpperCase()] && this.priceHistory[p][this.commodity.toUpperCase()]) {
+        firstPrice = this._getPriceFromObject(this.priceHistory[p]);
+        break;
+      }
+    }
 
-    // // If there are no valid price periods, return null.
-    // if (!firstPrice) {
-    //   throw new Error(`${this.uuid}: no valid price periods`);
-    // }
+    // If there are no valid price periods, return null.
+    if (!firstPrice) {
+      throw new Error(`${this.uuid}: no valid price periods`);
+    }
 
-    // // If the time is before the first piece of data in the set, return null because
-    // // the price is before the lookback window.
-    // if (time < firstPrice.date) {
-    //   throw new Error(`${this.uuid}: time ${time} is before firstPricePeriod.openTime`);
-    // }
+    // If the time is before the first piece of data in the set, return null because
+    // the price is before the lookback window.
+    if (time < firstPrice.date) {
+      throw new Error(`${this.uuid}: time ${time} is before firstPricePeriod.openTime`);
+    }
 
-    // // historicalPricePeriods are ordered from oldest to newest.
-    // // This finds the first pricePeriod whose closeTime is after the provided time.
-    // const match = this.priceHistory.find((pricePeriod) => {
-    //   return time < pricePeriod.date;
-    // });
+    // historicalPricePeriods are ordered from oldest to newest.
+    // This finds the first pricePeriod whose closeTime is after the provided time.
+    const match = this.priceHistory.find((pricePeriod) => {
+      return time < pricePeriod.date;
+    });
 
-    // // If there is no match, that means that the time was past the last data point.
-    // // In this case, the best match for this price is the current price.
-    // let returnPrice;
-    // if (match === undefined) {
-    //   if (this.currentPrice === null) throw new Error(`${this.uuid}: currentPrice is null`);
-    //   returnPrice = this.currentPrice;
-    //   if (verbose) {
-    //     console.group(`\n(${this.symbolString}) No price available @ ${time}`);
-    //     console.log(
-    //       `- ✅ Time is later than earliest historical time, fetching current price: ${Web3.utils.fromWei(
-    //         returnPrice.toString()
-    //       )}`
-    //     );
-    //     console.groupEnd();
-    //   }
-    //   return returnPrice;
-    // }
+    // If there is no match, that means that the time was past the last data point.
+    // In this case, the best match for this price is the current price.
+    let returnPrice;
+    if (match === undefined) {
+      if (this.currentPrice === null) throw new Error(`${this.uuid}: currentPrice is null`);
+      returnPrice = this.currentPrice;
+      if (verbose) {
+        console.group(`\n(${this.commodity}${this.baseCurrency}) No price available @ ${time}`);
+        console.log(
+          `- ✅ Time is later than earliest historical time, fetching current price: ${Web3.utils.fromWei(
+            returnPrice.toString()
+          )}`
+        );
+        console.groupEnd();
+      }
+      return returnPrice;
+    }
 
-    // returnPrice = match.openPrice;
-    // if (verbose) {
-    //   console.group(`\n(${this.symbolString}) Historical price @ ${match.date}`);
-    //   console.log(`- ✅ Open Price:${Web3.utils.fromWei(returnPrice.toString())}`);
-    //   console.groupEnd();
-    // }
-    // return returnPrice;
+    returnPrice = match.openPrice;
+    if (verbose) {
+      console.group(`\n(${this.commodity}${this.baseCurrency}) Historical price @ ${match.date}`);
+      console.log(`- ✅ Open Price:${Web3.utils.fromWei(returnPrice.toString())}`);
+      console.groupEnd();
+    }
+    return returnPrice;
   }
 
   public getLastUpdateTime(): number | null {
@@ -210,11 +208,11 @@ export class CommoditiesApiPriceFeed extends PriceFeedInterface {
     return moment.unix(inputSecond).format("YYYY-MM-DD");
   }
 
-  // private _dateTimeToSecond(inputDateTime: string, endOfDay = false) {
-  //   if (endOfDay) {
-  //     return moment(inputDateTime, "YYYY-MM-DD").endOf("day").unix();
-  //   } else {
-  //     return moment(inputDateTime, "YYYY-MM-DD").unix();
-  //   }
-  // }
+  private _dateTimeToSecond(inputDateTime: string, endOfDay = false) {
+    if (endOfDay) {
+      return moment(inputDateTime, "YYYY-MM-DD").endOf("day").unix();
+    } else {
+      return moment(inputDateTime, "YYYY-MM-DD").unix();
+    }
+  }
 }

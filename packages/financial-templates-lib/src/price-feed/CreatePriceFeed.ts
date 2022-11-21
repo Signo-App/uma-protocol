@@ -562,7 +562,7 @@ export async function createPriceFeed(
       config.minTimeBetweenUpdates
     );
   } else if (config.type === "commodities-api") {
-    const requiredFields = ["lookback", "baseCurrency", "commodity", "symbolString", "apiKey"];
+    const requiredFields = ["lookback", "baseCurrency", "commodity", "apiKey"];
 
     if (isMissingField(config, requiredFields, logger)) {
       return null;
@@ -574,7 +574,6 @@ export async function createPriceFeed(
       logger,
       config.baseCurrency,
       config.commodity,
-      config.symbolString,
       config.apiKey,
       config.lookback,
       networker,
