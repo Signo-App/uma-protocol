@@ -6,18 +6,19 @@ import { NetworkerInterface } from "./Networker";
 import { PriceFeedInterface } from "./PriceFeedInterface";
 import Web3 from "web3";
 
-export class MarketStackPriceFeed extends PriceFeedInterface {
+export class CommoditiesApiPriceFeed extends PriceFeedInterface {
   private readonly uuid: string;
   private readonly convertPriceFeedDecimals: (number: number | string | BN) => BN;
-  private priceHistory: { date: number; openPrice: BN }[];
+  private priceHistory: any;
   private currentPrice: BN | null = null;
   private lastUpdateTime: number | null = null;
 
   /**
-   * @notice Constructs the MarketStackPriceFeed.
+   * @notice Constructs the CommoditiesApiPriceFeed.
    * @param {Object} logger Winston module used to send logs.
-   * @param {String} symbolString String used in query to fetch data, i.e. "DXY.INDX"
-   * @param {String} apiKey apiKey for MarketStack api
+   * @param {String} baseCurrency currency to show price in i.e. "USD"
+   * @param {String} commodity commodity symbol i.e. "XAU"
+   * @param {String} apiKey apiKey for Commodities api
    * @param {Integer} lookback How far in the past the historical prices will be available using getHistoricalPrice.
    * @param {Object} networker Used to send the API requests.
    * @param {Function} getTime Returns the current time.
@@ -27,7 +28,8 @@ export class MarketStackPriceFeed extends PriceFeedInterface {
    */
   constructor(
     private readonly logger: Logger,
-    private readonly symbolString: String,
+    private readonly baseCurrency: String,
+    private readonly commodity: String,
     private readonly apiKey: string,
     private readonly lookback: number,
     private readonly networker: NetworkerInterface,
@@ -37,9 +39,9 @@ export class MarketStackPriceFeed extends PriceFeedInterface {
   ) {
     super();
 
-    this.uuid = `MarketStack-${symbolString}`;
+    this.uuid = `CommoditiesApi-${commodity}${baseCurrency}`;
 
-    this.priceHistory = [];
+    this.priceHistory = {};
 
     this.convertPriceFeedDecimals = (number) => {
       // Converts price result to wei
@@ -58,7 +60,7 @@ export class MarketStackPriceFeed extends PriceFeedInterface {
     // Return early if the last call was too recent.
     if (this.lastUpdateTime !== null && this.lastUpdateTime + this.minTimeBetweenUpdates > currentTime) {
       this.logger.debug({
-        at: "MarketStackPriceFeed",
+        at: "CommoditiesApiPriceFeed",
         message: "Update skipped because the last one was too recent",
         currentTime: currentTime,
         lastUpdateTimestamp: this.lastUpdateTime,
@@ -68,8 +70,8 @@ export class MarketStackPriceFeed extends PriceFeedInterface {
     }
 
     this.logger.debug({
-      at: "MarketStackPriceFeed",
-      message: "Updating MarketStackPriceFeed",
+      at: "CommoditiesApiPriceFeed",
+      message: "Updating CommoditiesApiPriceFeed",
       currentTime: currentTime,
       lastUpdateTimestamp: this.lastUpdateTime,
     });
@@ -81,14 +83,21 @@ export class MarketStackPriceFeed extends PriceFeedInterface {
     const endDateString = this._secondToDateTime(currentTime);
 
     // 1. Construct URL.
-    // See https://marketstack.com/documentation.
+    // See https://commodities-api.com/documentation
     const url =
-      "https://api.marketstack.com/v1/eod?" +
-      `symbols=${this.symbolString}&access_key=${this.apiKey}` +
-      `&date_from=${startDateString}&date_to=${endDateString}`;
+      "https://commodities-api.com/api/timeseries" +
+      `?access_key=${this.apiKey}` +
+      `&start_date=${startDateString}` +
+      `&end_date=${endDateString}` +
+      `&base=${this.baseCurrency}` +
+      `&symbols=${this.commodity}`;
+
+    console.log("DEBUG-comm: ", url);
 
     // 2. Send request.
     const historyResponse = await this.networker.getJson(url);
+
+    console.log("DEBUG-comm: historyResponse", historyResponse);
 
     // 3. Check responses.
     if (
@@ -99,27 +108,44 @@ export class MarketStackPriceFeed extends PriceFeedInterface {
     }
 
     // 4. Parse results.
-    const newHistoricalPricePeriods = historyResponse.data
-      .map((dailyData: any) => ({
-        date: this._dateTimeToSecond(dailyData.date),
-        openPrice: this.convertPriceFeedDecimals(dailyData.open)
-      }))
-      .sort((a: any, b: any) => {
-        // Sorts the data such that the oldest elements come first.
-        return a.date - b.date;
-      });
+    // historyResponse.data.rates -> {{"YYYY-MM-DD":{"commodity": value, "baseCurrency": value}}, ..}
+    // @ts-ignore
+    const newHistoricalPricePeriods = Object.entries(historyResponse.data.rates).map((e) => (Object.assign(e[1],
+      { "date": this._dateTimeToSecond(e[0]) }
+    )));
+    // newHistoricalPricePeriods -> [{"commodity": value, "baseCurrency": value, date: "YYYY-MM-DD"}, ..]
+    // e.g. [{ XAU: 0.00057065248405026, USD: 1, date: 1668882600 }, ..]
+
 
     // 5. Store results.
-    this.currentPrice = newHistoricalPricePeriods[newHistoricalPricePeriods.length - 1].openPrice;
+    this.currentPrice = this._getPriceFromObject(newHistoricalPricePeriods[newHistoricalPricePeriods.length - 1])
     this.priceHistory = newHistoricalPricePeriods;
     this.lastUpdateTime = currentTime;
+
+    console.log("DEBUG-comm: this.currentPrice", this.currentPrice);
+    console.log("DEBUG-comm: this.currentPrice", this.currentPrice.toString());
+    console.log("DEBUG-comm: this.priceHistory", this.priceHistory);
+
+  }
+
+  /**
+   * Calculates the price using the base currency and commodity price
+   * @param rate {"YYYY-MM-DD":{"commodity": number, "baseCurrency": number}
+   * @returns number
+   */
+  private _getPriceFromObject(rate: { [x: string]: number; }): BN {
+    const price = rate[this.baseCurrency.toUpperCase()] / rate[this.commodity.toUpperCase()];
+    return Web3.utils.toBN(parseFixed(price.toString().substring(0, this.priceFeedDecimals), this.priceFeedDecimals).toString());
   }
 
   public getCurrentPrice(): BN | null {
     return this.currentPrice;
   }
 
+  // TODO: when is this function used?
   public async getHistoricalPrice(time: number, ancillaryData?: string, verbose?: boolean): Promise<BN | null> {
+    console.log("DEBUG-comm: getHistoricalPrice", time);
+
     if (this.lastUpdateTime === undefined) {
       throw new Error(`${this.uuid}: undefined lastUpdateTime`);
     }
@@ -146,7 +172,7 @@ export class MarketStackPriceFeed extends PriceFeedInterface {
 
     // historicalPricePeriods are ordered from oldest to newest.
     // This finds the first pricePeriod whose closeTime is after the provided time.
-    const match = this.priceHistory.find((pricePeriod) => {
+    const match = this.priceHistory.find((pricePeriod: { date: number; }) => {
       return time < pricePeriod.date;
     });
 
@@ -157,7 +183,7 @@ export class MarketStackPriceFeed extends PriceFeedInterface {
       if (this.currentPrice === null) throw new Error(`${this.uuid}: currentPrice is null`);
       returnPrice = this.currentPrice;
       if (verbose) {
-        console.group(`\n(${this.symbolString}) No price available @ ${time}`);
+        console.group(`\n(${this.commodity}${this.baseCurrency}) No price available @ ${time}`);
         console.log(
           `- ✅ Time is later than earliest historical time, fetching current price: ${Web3.utils.fromWei(
             returnPrice.toString()
@@ -168,9 +194,9 @@ export class MarketStackPriceFeed extends PriceFeedInterface {
       return returnPrice;
     }
 
-    returnPrice = match.openPrice;
+    returnPrice = this._getPriceFromObject(match)
     if (verbose) {
-      console.group(`\n(${this.symbolString}) Historical price @ ${match.date}`);
+      console.group(`\n(${this.commodity}${this.baseCurrency}) Historical price @ ${match.date}`);
       console.log(`- ✅ Open Price:${Web3.utils.fromWei(returnPrice.toString())}`);
       console.groupEnd();
     }
@@ -192,6 +218,7 @@ export class MarketStackPriceFeed extends PriceFeedInterface {
   private _secondToDateTime(inputSecond: number) {
     return moment.unix(inputSecond).format("YYYY-MM-DD");
   }
+
   private _dateTimeToSecond(inputDateTime: string, endOfDay = false) {
     if (endOfDay) {
       return moment(inputDateTime, "YYYY-MM-DD").endOf("day").unix();
