@@ -97,7 +97,7 @@ export class CommoditiesApiPriceFeed extends PriceFeedInterface {
     // 2. Send request.
     const historyResponse = await this.networker.getJson(url);
 
-    console.log("DEBUG-comm: ", historyResponse);
+    console.log("DEBUG-comm: historyResponse", historyResponse);
 
     // 3. Check responses.
     if (
@@ -114,27 +114,38 @@ export class CommoditiesApiPriceFeed extends PriceFeedInterface {
       { "date": this._dateTimeToSecond(e[0]) }
     )));
     // newHistoricalPricePeriods -> [{"commodity": value, "baseCurrency": value, date: "YYYY-MM-DD"}, ..]
+    // e.g. [{ XAU: 0.00057065248405026, USD: 1, date: 1668882600 }, ..]
+
 
     // 5. Store results.
-    this.currentPrice = this.getHistoricalPrice(currentTime);
+    this.currentPrice = this._getPriceFromObject(newHistoricalPricePeriods[newHistoricalPricePeriods.length - 1])
     this.priceHistory = newHistoricalPricePeriods;
     this.lastUpdateTime = currentTime;
+
+    console.log("DEBUG-comm: this.currentPrice", this.currentPrice);
+    console.log("DEBUG-comm: this.currentPrice", this.currentPrice.toString());
+    console.log("DEBUG-comm: this.priceHistory", this.priceHistory);
+
   }
 
   /**
-   * 
+   * Calculates the price using the base currency and commodity price
    * @param rate {"YYYY-MM-DD":{"commodity": number, "baseCurrency": number}
    * @returns number
    */
-  private _getPriceFromObject(rate) {
-    return rate[this.baseCurrency.toUpperCase()] / rate[this.commodity.toUpperCase()];
+  private _getPriceFromObject(rate: { [x: string]: number; }): BN {
+    const price = rate[this.baseCurrency.toUpperCase()] / rate[this.commodity.toUpperCase()];
+    return Web3.utils.toBN(parseFixed(price.toString().substring(0, this.priceFeedDecimals), this.priceFeedDecimals).toString());
   }
 
   public getCurrentPrice(): BN | null {
     return this.currentPrice;
   }
 
+  // TODO: when is this function used?
   public async getHistoricalPrice(time: number, ancillaryData?: string, verbose?: boolean): Promise<BN | null> {
+    console.log("DEBUG-comm: getHistoricalPrice", time);
+
     if (this.lastUpdateTime === undefined) {
       throw new Error(`${this.uuid}: undefined lastUpdateTime`);
     }
@@ -142,8 +153,8 @@ export class CommoditiesApiPriceFeed extends PriceFeedInterface {
     // Set first price period in `historicalPricePeriods` to first non-null price.
     let firstPrice;
     for (const p in this.priceHistory) {
-      if (this.priceHistory[p] && this.priceHistory[p][this.baseCurrency.toUpperCase()] && this.priceHistory[p][this.commodity.toUpperCase()]) {
-        firstPrice = this._getPriceFromObject(this.priceHistory[p]);
+      if (this.priceHistory[p] && this.priceHistory[p].date) {
+        firstPrice = this.priceHistory[p];
         break;
       }
     }
@@ -161,7 +172,7 @@ export class CommoditiesApiPriceFeed extends PriceFeedInterface {
 
     // historicalPricePeriods are ordered from oldest to newest.
     // This finds the first pricePeriod whose closeTime is after the provided time.
-    const match = this.priceHistory.find((pricePeriod) => {
+    const match = this.priceHistory.find((pricePeriod: { date: number; }) => {
       return time < pricePeriod.date;
     });
 
@@ -183,7 +194,7 @@ export class CommoditiesApiPriceFeed extends PriceFeedInterface {
       return returnPrice;
     }
 
-    returnPrice = match.openPrice;
+    returnPrice = this._getPriceFromObject(match)
     if (verbose) {
       console.group(`\n(${this.commodity}${this.baseCurrency}) Historical price @ ${match.date}`);
       console.log(`- ✅ Open Price:${Web3.utils.fromWei(returnPrice.toString())}`);
