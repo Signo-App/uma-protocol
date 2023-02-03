@@ -27,7 +27,7 @@ export class URTHPriceFeed extends PriceFeedInterface {
    */
   constructor(
     private readonly logger: Logger,
-    private readonly index: String,
+    private readonly index: string,
     private readonly apiKey: string,
     private readonly lookback: number,
     private readonly networker: NetworkerInterface,
@@ -45,7 +45,9 @@ export class URTHPriceFeed extends PriceFeedInterface {
       // Converts price result to wei
       // returns price conversion to correct decimals as a big number.
       // Note: Must ensure that `number` has no more decimal places than `priceFeedDecimals`.
-      return Web3.utils.toBN(parseFixed(number.toString().substring(0, priceFeedDecimals), priceFeedDecimals).toString());
+      return Web3.utils.toBN(
+        parseFixed(number.toString().substring(0, priceFeedDecimals), priceFeedDecimals).toString()
+      );
     };
   }
   // Updates the internal state of the price feed. Should pull in any async data so the get*Price methods can be called.
@@ -74,25 +76,15 @@ export class URTHPriceFeed extends PriceFeedInterface {
       lastUpdateTimestamp: this.lastUpdateTime,
     });
 
-    // Find the closest day that completed before the beginning of the lookback window, and use
-    // it as the start date.
-    const startLookbackWindow = currentTime - this.lookback;
-    const startDateString = this._secondToDateTime(startLookbackWindow);
-    const endDateString = this._secondToDateTime(currentTime);
-
     // 1. Construct URL.
     // See https://polygon.io/docs/stocks/getting-started.
-    const url =
-    "https://api.polygon.io/v1/open-close/" + this.index + `2023-01-09?adjusted=true&apiKey=${this.apiKey}`;
+    const url = "https://api.polygon.io/v1/open-close/" + this.index + `2023-01-09?adjusted=true&apiKey=${this.apiKey}`;
 
     // 2. Send request.
     const historyResponse = await this.networker.getJson(url);
 
     // 3. Check responses.
-    if (
-      !(historyResponse?.data) ||
-      historyResponse.data.length === 0
-    ) {
+    if (!historyResponse?.data || historyResponse.data.length === 0) {
       throw new Error(`🚨Could not parse price result from url ${url}: ${JSON.stringify(historyResponse)}`);
     }
 
@@ -100,7 +92,7 @@ export class URTHPriceFeed extends PriceFeedInterface {
     const newHistoricalPricePeriods = historyResponse.data
       .map((dailyData: any) => ({
         date: this._dateTimeToSecond(dailyData.date),
-        openPrice: this.convertPriceFeedDecimals(dailyData.open)
+        openPrice: this.convertPriceFeedDecimals(dailyData.open),
       }))
       .sort((a: any, b: any) => {
         // Sorts the data such that the oldest elements come first.
