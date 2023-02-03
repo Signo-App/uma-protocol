@@ -525,7 +525,7 @@ export async function createPriceFeed(
       config.minTimeBetweenUpdates
     );
   } else if (config.type === "URTH-api") {
-    const requiredFields = ["index", "lookback", "type", "apiKey"];
+    const requiredFields = ["index", "lookback", "apiKey"];
 
     if (isMissingField(config, requiredFields, logger)) {
       return null;
