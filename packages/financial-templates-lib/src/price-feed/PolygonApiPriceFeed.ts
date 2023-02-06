@@ -6,7 +6,7 @@ import { NetworkerInterface } from "./Networker";
 import { PriceFeedInterface } from "./PriceFeedInterface";
 import Web3 from "web3";
 
-export class URTHPriceFeed extends PriceFeedInterface {
+export class PolygonApiPriceFeed extends PriceFeedInterface {
   private readonly uuid: string;
   private readonly convertPriceFeedDecimals: (number: number | string | BN) => BN;
   private priceHistory: { date: number; closePrice: BN }[];
@@ -14,7 +14,7 @@ export class URTHPriceFeed extends PriceFeedInterface {
   private lastUpdateTime: number | null = null;
 
   /**
-   * @notice Constructs the URTHPriceFeed.
+   * @notice Constructs the PolygonApiPriceFeed.
    * @param {Object} logger Winston module used to send logs.
    * @param {String} index String used in query to fetch index data, i.e. "URTH"
    * @param {String} apiKey apiKey for polygon api
@@ -58,7 +58,7 @@ export class URTHPriceFeed extends PriceFeedInterface {
     // Return early if the last call was too recent.
     if (this.lastUpdateTime !== null && this.lastUpdateTime + this.minTimeBetweenUpdates > currentTime) {
       this.logger.debug({
-        at: "URTHPriceFeed",
+        at: "PolygonApiPriceFeed",
         message: "Update skipped because the last one was too recent",
         currentTime: currentTime,
         lastUpdateTimestamp: this.lastUpdateTime,
@@ -68,8 +68,8 @@ export class URTHPriceFeed extends PriceFeedInterface {
     }
 
     this.logger.debug({
-      at: "URTHPriceFeed",
-      message: "Updating URTHPriceFeed",
+      at: "PolygonApiPriceFeed",
+      message: "Updating PolygonApiPriceFeed",
       currentTime: currentTime,
       lastUpdateTimestamp: this.lastUpdateTime,
     });
