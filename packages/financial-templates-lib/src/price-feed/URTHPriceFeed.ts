@@ -9,7 +9,7 @@ import Web3 from "web3";
 export class URTHPriceFeed extends PriceFeedInterface {
   private readonly uuid: string;
   private readonly convertPriceFeedDecimals: (number: number | string | BN) => BN;
-  private priceHistory: { date: number; openPrice: BN }[];
+  private priceHistory: { date: number; closePrice: BN }[];
   private currentPrice: BN | null = null;
   private lastUpdateTime: number | null = null;
 
@@ -27,7 +27,7 @@ export class URTHPriceFeed extends PriceFeedInterface {
    */
   constructor(
     private readonly logger: Logger,
-    private readonly index: string,
+    private readonly index: String,
     private readonly apiKey: string,
     private readonly lookback: number,
     private readonly networker: NetworkerInterface,
@@ -45,9 +45,7 @@ export class URTHPriceFeed extends PriceFeedInterface {
       // Converts price result to wei
       // returns price conversion to correct decimals as a big number.
       // Note: Must ensure that `number` has no more decimal places than `priceFeedDecimals`.
-      return Web3.utils.toBN(
-        parseFixed(number.toString().substring(0, priceFeedDecimals), priceFeedDecimals).toString()
-      );
+      return Web3.utils.toBN(parseFixed(number.toString().substring(0, priceFeedDecimals), priceFeedDecimals).toString());
     };
   }
   // Updates the internal state of the price feed. Should pull in any async data so the get*Price methods can be called.
@@ -76,34 +74,84 @@ export class URTHPriceFeed extends PriceFeedInterface {
       lastUpdateTimestamp: this.lastUpdateTime,
     });
 
+    const startLookbackWindow = currentTime - this.lookback;
+    const startDateString = this._secondToDateTime(startLookbackWindow);
+    const endDateString = this._secondToDateTime(currentTime);
+
+    console.log("DEBUG-URTH: Logging here too");
+
     // 1. Construct URL.
     // See https://polygon.io/docs/stocks/getting-started.
-    const url = "https://api.polygon.io/v1/open-close/" + this.index + `2023-01-09?adjusted=true&apiKey=${this.apiKey}`;
+    // const url = "https://api.polygon.io/v1/open-close/" + this.index + `/2023-01-09?adjusted=true&apiKey=${this.apiKey}`;
+    const url = `https://api.polygon.io/v2/aggs/ticker/${this.index}/range/1/day/${startDateString}/${endDateString}?adjusted=true&sort=asc&limit=120&apiKey=P7M7KmcIh02_8IOjNy5t12vLavqu58nr`;
+
+    console.log("DEBUG-URTH: url", url);
 
     // 2. Send request.
     const historyResponse = await this.networker.getJson(url);
+    console.log("DEBUG-URTH: ", historyResponse);
+
+    // closing price => c
+    // {
+    //   "adjusted": true,
+    //   "queryCount": 2,
+    //   "request_id": "6a7e466379af0a71039d60cc78e72282",
+    //   "results": [
+    //     {
+    //       "c": 75.0875,
+    //       "h": 75.15,
+    //       "l": 73.7975,
+    //       "n": 1,
+    //       "o": 74.06,
+    //       "t": 1577941200000,
+    //       "v": 135647456,
+    //       "vw": 74.6099
+    //     },
+    //     {
+    //       "c": 74.3575,
+    //       "h": 75.145,
+    //       "l": 74.125,
+    //       "n": 1,
+    //       "o": 74.2875,
+    //       "t": 1578027600000,
+    //       "v": 146535512,
+    //       "vw": 74.7026
+    //     }
+    //   ],
+    //   "resultsCount": 2,
+    //   "status": "OK",
+    //   "ticker": "AAPL"
+    // }
 
     // 3. Check responses.
-    if (!historyResponse?.data || historyResponse.data.length === 0) {
+    if (!historyResponse?.results || historyResponse.results.length === 0) {
       throw new Error(`🚨Could not parse price result from url ${url}: ${JSON.stringify(historyResponse)}`);
     }
 
+
     // 4. Parse results.
-    const newHistoricalPricePeriods = historyResponse.data
-      .map((dailyData: any) => ({
-        date: this._dateTimeToSecond(dailyData.date),
-        openPrice: this.convertPriceFeedDecimals(dailyData.open),
-      }))
-      .sort((a: any, b: any) => {
-        // Sorts the data such that the oldest elements come first.
-        return a.date - b.date;
-      });
+    // historyResponse.results.rates -> {"c": 75.0875,"h": 75.15,"l": 73.7975,"n": 1,"o": 74.06,"t": 1577941200000,"v": 135647456,"vw": 74.6099 },{  "c": 74.3575,  "h": 75.145,  "l": 74.125,  "n": 1,  "o": 74.2875,  "t": 1578027600000,  "v": 146535512,  "vw": 74.7026}
+    const newHistoricalPricePeriods =
+      historyResponse.results
+        .map((dailyData: any) => ({
+          date: dailyData.t,
+          closePrice: this.convertPriceFeedDecimals(dailyData.c),
+        }))
+        .sort((a: any, b: any) => {
+          // Sorts the data such that the oldest elements come first.
+          return a.date - b.date;
+        });
 
     // 5. Store results.
-    this.currentPrice = newHistoricalPricePeriods[newHistoricalPricePeriods.length - 1].openPrice;
+    this.currentPrice = newHistoricalPricePeriods[newHistoricalPricePeriods.length - 1].closePrice;
     this.priceHistory = newHistoricalPricePeriods;
     this.lastUpdateTime = currentTime;
+
+    console.log("DEBUG-URTH: ", this.currentPrice?.toString());
+    console.log("DEBUG-URTH: ", this.priceHistory);
+
   }
+
 
   public getCurrentPrice(): BN | null {
     return this.currentPrice;
@@ -158,7 +206,7 @@ export class URTHPriceFeed extends PriceFeedInterface {
       return returnPrice;
     }
 
-    returnPrice = match.openPrice;
+    returnPrice = match.closePrice;
     if (verbose) {
       console.group(`\n(${this.index}) Historical price @ ${match.date}`);
       console.log(`- ✅ Open Price:${Web3.utils.fromWei(returnPrice.toString())}`);
