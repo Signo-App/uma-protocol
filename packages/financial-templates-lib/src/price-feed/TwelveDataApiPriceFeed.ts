@@ -6,7 +6,7 @@ import { NetworkerInterface } from "./Networker";
 import { PriceFeedInterface } from "./PriceFeedInterface";
 import Web3 from "web3";
 
-export class TweleveDataApiPriceFeed extends PriceFeedInterface {
+export class TwelveDataApiPriceFeed extends PriceFeedInterface {
   private readonly uuid: string;
   private readonly convertPriceFeedDecimals: (number: number | string | BN) => BN;
   private priceHistory: { date: number; closePrice: BN }[];
@@ -14,10 +14,10 @@ export class TweleveDataApiPriceFeed extends PriceFeedInterface {
   private lastUpdateTime: number | null = null;
 
   /**
-   * @notice Constructs the TweleveDataApiPriceFeed.
+   * @notice Constructs the TwelveDataApiPriceFeed.
    * @param {Object} logger Winston module used to send logs.
    * @param {String} index String used in query to fetch index data, i.e. "URTH"
-   * @param {String} apiKey apiKey for TweleveData api
+   * @param {String} apiKey apiKey for TwelveData api
    * @param {Integer} lookback How far in the past the historical prices will be available using getHistoricalPrice.
    * @param {Object} networker Used to send the API requests.
    * @param {Function} getTime Returns the current time.
@@ -27,7 +27,7 @@ export class TweleveDataApiPriceFeed extends PriceFeedInterface {
    */
   constructor(
     private readonly logger: Logger,
-    private readonly index: String,
+    private readonly index: string,
     private readonly apiKey: string,
     private readonly lookback: number,
     private readonly networker: NetworkerInterface,
@@ -37,7 +37,7 @@ export class TweleveDataApiPriceFeed extends PriceFeedInterface {
   ) {
     super();
 
-    this.uuid = `TweleveData-${index}`;
+    this.uuid = `TwelveData-${index}`;
 
     this.priceHistory = [];
 
@@ -58,7 +58,7 @@ export class TweleveDataApiPriceFeed extends PriceFeedInterface {
     // Return early if the last call was too recent.
     if (this.lastUpdateTime !== null && this.lastUpdateTime + this.minTimeBetweenUpdates > currentTime) {
       this.logger.debug({
-        at: "TweleveDataApiPriceFeed",
+        at: "TwelveDataApiPriceFeed",
         message: "Update skipped because the last one was too recent",
         currentTime: currentTime,
         lastUpdateTimestamp: this.lastUpdateTime,
@@ -68,8 +68,8 @@ export class TweleveDataApiPriceFeed extends PriceFeedInterface {
     }
 
     this.logger.debug({
-      at: "TweleveDataApiPriceFeed",
-      message: "Updating TweleveDataApiPriceFeed",
+      at: "TwelveDataApiPriceFeed",
+      message: "Updating TwelveDataApiPriceFeed",
       currentTime: currentTime,
       lastUpdateTimestamp: this.lastUpdateTime,
     });
@@ -86,7 +86,7 @@ export class TweleveDataApiPriceFeed extends PriceFeedInterface {
     // https://api.twelvedata.com/time_series?apikey=API_KEY=1h&symbol=SYMBOL&start_date=START_DATE&end_date=END_DATE;
     const url = `https://api.twelvedata.com/time_series?apikey=8c28e2ab6088439e92a60426194469af&interval=1h&symbol=URTH&start_date=2023-02-10 09:30:00&end_date=2023-02-13 20:00:00`;
 
-    console.log("DEBUG-TWELEVE: url", url);
+    console.log("DEBUG-Twelve: url", url);
 
     // 2. Send request.
     const historyResponse = await this.networker.getJson(url);
@@ -136,9 +136,14 @@ export class TweleveDataApiPriceFeed extends PriceFeedInterface {
     const newHistoricalPricePeriods =
       historyResponse.values
         .map((dailyData: any) => ({
-          date: dailyData.datetime,
+          date: this._dateTimeToSecond(dailyData.datetime),
           closePrice: this.convertPriceFeedDecimals(dailyData.close),
         }))
+        .sort((a: any, b: any) => {
+          // Sorts the data such that the most recent elements come first.
+          return b.date - a.date;
+        });
+
 
     // 5. Store results.
     this.currentPrice = newHistoricalPricePeriods[newHistoricalPricePeriods.length - 1].closePrice;
