@@ -6,7 +6,7 @@ import { NetworkerInterface } from "./Networker";
 import { PriceFeedInterface } from "./PriceFeedInterface";
 import Web3 from "web3";
 
-export class PolygonApiPriceFeed extends PriceFeedInterface {
+export class TweleveDataApiPriceFeed extends PriceFeedInterface {
   private readonly uuid: string;
   private readonly convertPriceFeedDecimals: (number: number | string | BN) => BN;
   private priceHistory: { date: number; closePrice: BN }[];
@@ -14,10 +14,10 @@ export class PolygonApiPriceFeed extends PriceFeedInterface {
   private lastUpdateTime: number | null = null;
 
   /**
-   * @notice Constructs the PolygonApiPriceFeed.
+   * @notice Constructs the TweleveDataApiPriceFeed.
    * @param {Object} logger Winston module used to send logs.
    * @param {String} index String used in query to fetch index data, i.e. "URTH"
-   * @param {String} apiKey apiKey for polygon api
+   * @param {String} apiKey apiKey for TweleveData api
    * @param {Integer} lookback How far in the past the historical prices will be available using getHistoricalPrice.
    * @param {Object} networker Used to send the API requests.
    * @param {Function} getTime Returns the current time.
@@ -37,7 +37,7 @@ export class PolygonApiPriceFeed extends PriceFeedInterface {
   ) {
     super();
 
-    this.uuid = `Polygon-${index}`;
+    this.uuid = `TweleveData-${index}`;
 
     this.priceHistory = [];
 
@@ -58,7 +58,7 @@ export class PolygonApiPriceFeed extends PriceFeedInterface {
     // Return early if the last call was too recent.
     if (this.lastUpdateTime !== null && this.lastUpdateTime + this.minTimeBetweenUpdates > currentTime) {
       this.logger.debug({
-        at: "PolygonApiPriceFeed",
+        at: "TweleveDataApiPriceFeed",
         message: "Update skipped because the last one was too recent",
         currentTime: currentTime,
         lastUpdateTimestamp: this.lastUpdateTime,
@@ -68,8 +68,8 @@ export class PolygonApiPriceFeed extends PriceFeedInterface {
     }
 
     this.logger.debug({
-      at: "PolygonApiPriceFeed",
-      message: "Updating PolygonApiPriceFeed",
+      at: "TweleveDataApiPriceFeed",
+      message: "Updating TweleveDataApiPriceFeed",
       currentTime: currentTime,
       lastUpdateTimestamp: this.lastUpdateTime,
     });
@@ -81,66 +81,64 @@ export class PolygonApiPriceFeed extends PriceFeedInterface {
     console.log("DEBUG-URTH: Logging here too");
 
     // 1. Construct URL.
-    // See https://polygon.io/docs/stocks/getting-started.
-    // const url = "https://api.polygon.io/v1/open-close/" + this.index + `/2023-01-09?adjusted=true&apiKey=${this.apiKey}`;
-    const url = `https://api.polygon.io/v2/aggs/ticker/${this.index}/range/1/day/${startDateString}/${endDateString}?adjusted=true&sort=asc&limit=120&apiKey=P7M7KmcIh02_8IOjNy5t12vLavqu58nr`;
+    // See https://twelvedata.com/docs#getting-started
+    // Timeseries API with date range, results are ordered in time descending
+    // https://api.twelvedata.com/time_series?apikey=API_KEY=1h&symbol=SYMBOL&start_date=START_DATE&end_date=END_DATE;
+    const url = `https://api.twelvedata.com/time_series?apikey=8c28e2ab6088439e92a60426194469af&interval=1h&symbol=URTH&start_date=2023-02-10 09:30:00&end_date=2023-02-13 20:00:00`;
 
-    console.log("DEBUG-URTH: url", url);
+    console.log("DEBUG-TWELEVE: url", url);
 
     // 2. Send request.
     const historyResponse = await this.networker.getJson(url);
-    console.log("DEBUG-URTH: ", historyResponse);
+    console.log("DEBUG-TWELVEDATA: ", historyResponse);
 
-    // closing price => c
+    // Sample Response
     // {
-    //   "adjusted": true,
-    //   "queryCount": 2,
-    //   "request_id": "6a7e466379af0a71039d60cc78e72282",
-    //   "results": [
-    //     {
-    //       "c": 75.0875,
-    //       "h": 75.15,
-    //       "l": 73.7975,
-    //       "n": 1,
-    //       "o": 74.06,
-    //       "t": 1577941200000,
-    //       "v": 135647456,
-    //       "vw": 74.6099
-    //     },
-    //     {
-    //       "c": 74.3575,
-    //       "h": 75.145,
-    //       "l": 74.125,
-    //       "n": 1,
-    //       "o": 74.2875,
-    //       "t": 1578027600000,
-    //       "v": 146535512,
-    //       "vw": 74.7026
-    //     }
+    //   "meta": {
+    //   "symbol": "URTH",
+    //   "interval": "1h",
+    //   "currency": "USD",
+    //   "exchange_timezone": "America/New_York",
+    //   "exchange": "NYSE",
+    //   "mic_code": "ARCX",
+    //   "type": "ETF"
+    //   },
+    //   "values": [
+    //   {
+    //   "datetime": "2023-02-10 15:30:00",
+    //   "open": "116.67000",
+    //   "high": "116.93000",
+    //   "low": "116.67000",
+    //   "close": "116.84000",
+    //   "volume": "19274"
+    //   },
+    //   {
+    //   "datetime": "2023-02-10 14:30:00",
+    //   "open": "116.45500",
+    //   "high": "116.78000",
+    //   "low": "116.45000",
+    //   "close": "116.64000",
+    //   "volume": "145608"
+    //   },
+    //   .
+    //   .
     //   ],
-    //   "resultsCount": 2,
-    //   "status": "OK",
-    //   "ticker": "AAPL"
-    // }
+    //   "status": "ok"
+    //   }
 
     // 3. Check responses.
-    if (!historyResponse?.results || historyResponse.results.length === 0) {
+    if (!historyResponse?.values || historyResponse.values.length === 0) {
       throw new Error(`🚨Could not parse price result from url ${url}: ${JSON.stringify(historyResponse)}`);
     }
 
-
     // 4. Parse results.
-    // historyResponse.results.rates -> {"c": 75.0875,"h": 75.15,"l": 73.7975,"n": 1,"o": 74.06,"t": 1577941200000,"v": 135647456,"vw": 74.6099 },{  "c": 74.3575,  "h": 75.145,  "l": 74.125,  "n": 1,  "o": 74.2875,  "t": 1578027600000,  "v": 146535512,  "vw": 74.7026}
+    // historyResponse.values
     const newHistoricalPricePeriods =
-      historyResponse.results
+      historyResponse.values
         .map((dailyData: any) => ({
-          date: dailyData.t,
-          closePrice: this.convertPriceFeedDecimals(dailyData.c),
+          date: dailyData.datetime,
+          closePrice: this.convertPriceFeedDecimals(dailyData.close),
         }))
-        .sort((a: any, b: any) => {
-          // Sorts the data such that the oldest elements come first.
-          return a.date - b.date;
-        });
 
     // 5. Store results.
     this.currentPrice = newHistoricalPricePeriods[newHistoricalPricePeriods.length - 1].closePrice;
