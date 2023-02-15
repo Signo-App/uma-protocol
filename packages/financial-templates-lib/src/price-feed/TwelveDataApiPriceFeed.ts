@@ -11,6 +11,7 @@ export class TwelveDataApiPriceFeed extends PriceFeedInterface {
   private readonly convertPriceFeedDecimals: (number: number | string | BN) => BN;
   private priceHistory: { date: number; closePrice: BN }[];
   private currentPrice: BN | null = null;
+  private oldestHistoricalPrice: BN | null = null;
   private lastUpdateTime: number | null = null;
 
   /**
@@ -140,17 +141,21 @@ export class TwelveDataApiPriceFeed extends PriceFeedInterface {
           closePrice: this.convertPriceFeedDecimals(dailyData.close),
         }))
         .sort((a: any, b: any) => {
-          // Sorts the data such that the most recent elements come first.
+          // Sorts the data such that the most recent prices come first.
           return b.date - a.date;
         });
 
 
     // 5. Store results.
-    this.currentPrice = newHistoricalPricePeriods[newHistoricalPricePeriods.length - 1].closePrice;
+    this.currentPrice = newHistoricalPricePeriods[0].closePrice;
+    this.oldestHistoricalPrice = newHistoricalPricePeriods[newHistoricalPricePeriods.length - 1].closePrice;
     this.priceHistory = newHistoricalPricePeriods;
     this.lastUpdateTime = currentTime;
 
-    console.log("DEBUG-URTH: ", this.currentPrice?.toString());
+    console.log("Debug-TwelveData: ", newHistoricalPricePeriods);
+    console.log("DEBUG-URTH-CurrentPrice: ", this.currentPrice?.toString());
+    console.log("DEBUG-URTH-OldestHistoricalPrice: ", this.oldestHistoricalPrice?.toString());
+    console.log("DEBUG-URTH: ", this.currentPrice);
     console.log("DEBUG-URTH: ", this.priceHistory);
 
   }
@@ -160,7 +165,12 @@ export class TwelveDataApiPriceFeed extends PriceFeedInterface {
     return this.currentPrice;
   }
 
+  public getOldestHistoricalPrice(): BN | null {
+    return this.oldestHistoricalPrice;
+  }
+
   public async getHistoricalPrice(time: number, ancillaryData?: string, verbose?: boolean): Promise<BN | null> {
+
     if (this.lastUpdateTime === undefined) {
       throw new Error(`${this.uuid}: undefined lastUpdateTime`);
     }
@@ -179,28 +189,28 @@ export class TwelveDataApiPriceFeed extends PriceFeedInterface {
       throw new Error(`${this.uuid}: no valid price periods`);
     }
 
-    // If the time is before the first piece of data in the set, return null because
-    // the price is before the lookback window.
-    if (time < firstPrice.date) {
-      throw new Error(`${this.uuid}: time ${time} is before firstPricePeriod.openTime`);
+    // If the time is after the first piece of data in the set, return null because
+    // the price is after the lookback window.
+    if (time > firstPrice.date) {
+      throw new Error(`${this.uuid}: time ${time} is after firstPricePeriod.openTime`);
     }
 
-    // historicalPricePeriods are ordered from oldest to newest.
-    // This finds the first pricePeriod whose closeTime is after the provided time.
+    // historicalPricePeriods are ordered from newest to oldest.
+    // This finds the first pricePeriod whose closeTime is before the provided time.
     const match = this.priceHistory.find((pricePeriod) => {
-      return time < pricePeriod.date;
+      return time > pricePeriod.date;
     });
 
-    // If there is no match, that means that the time was past the last data point.
-    // In this case, the best match for this price is the current price.
+    // If there is no match, that means that the time was before the last data point in the array.
+    // In this case, the best match for this price is the oldestHistoricalPrice.
     let returnPrice;
     if (match === undefined) {
-      if (this.currentPrice === null) throw new Error(`${this.uuid}: currentPrice is null`);
-      returnPrice = this.currentPrice;
+      if (this.oldestHistoricalPrice === null) throw new Error(`${this.uuid}: oldestHistoricalPrice is null`);
+      returnPrice = this.oldestHistoricalPrice;
       if (verbose) {
         console.group(`\n(${this.index}) No price available @ ${time}`);
         console.log(
-          `- ✅ Time is later than earliest historical time, fetching current price: ${Web3.utils.fromWei(
+          `- ✅ Time is before earliest historical time, fetching oldest historical price: ${Web3.utils.fromWei(
             returnPrice.toString()
           )}`
         );
@@ -217,6 +227,7 @@ export class TwelveDataApiPriceFeed extends PriceFeedInterface {
     }
     return returnPrice;
   }
+  
 
   public getLastUpdateTime(): number | null {
     return this.lastUpdateTime;
