@@ -17,7 +17,6 @@ export class KapsarcApiPriceFeed extends PriceFeedInterface {
    * @notice Constructs the PolygonApiPriceFeed.
    * @param {Object} logger Winston module used to send logs.
    * @param {String} datasetIdentifier String used in query to fetch ticker symbol data, i.e. "USCPI"
-   * @param {String} apiKey apiKey for polygon api
    * @param {Integer} lookback How far in the past the historical prices will be available using getHistoricalPrice.
    * @param {Object} networker Used to send the API requests.
    * @param {Function} getTime Returns the current time.
@@ -28,7 +27,6 @@ export class KapsarcApiPriceFeed extends PriceFeedInterface {
   constructor(
     private readonly logger: Logger,
     private readonly datasetIdentifier: string,
-    private readonly apiKey: string,
     private readonly lookback: number,
     private readonly networker: NetworkerInterface,
     private readonly getTime: () => Promise<number>,

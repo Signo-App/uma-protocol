@@ -191,9 +191,8 @@ export async function createPriceFeed(
 
     return new KapsarcApiPriceFeed(
       logger,
-      providedWeb3,
+      config.datasetIdentifier,
       config.lookback,
-      config.datasetIdentifier
       networker,
       getTime,
       config.minTimeBetweenUpdates,
