@@ -21,6 +21,7 @@ import { FallBackPriceFeed } from "./FallBackPriceFeed";
 import { ForexDailyPriceFeed } from "./ForexDailyPriceFeed";
 import { FundingRateMultiplierPriceFeed } from "./FundingRateMultiplierPriceFeed";
 import { InvalidPriceFeedMock } from "./InvalidPriceFeedMock";
+import { KapsarcApiPriceFeed } from "./KapsarcApiPriceFeed";
 import { LPPriceFeed } from "./LPPriceFeed";
 import { MedianizerPriceFeed } from "./MedianizerPriceFeed";
 import { PriceFeedMockScaled } from "./PriceFeedMockScaled";
@@ -178,6 +179,25 @@ export async function createPriceFeed(
       getTime,
       config.priceFeedDecimals, // Defaults to 18 unless supplied. Informs how the feed should be scaled to match a DVM response.
       config.minTimeBetweenUpdates // Defaults to 43200 (12 hours) unless supplied.
+    );
+  } else if (config.type === "Kapsarc-api") {
+    const requiredFields = ["lookback", "datasetIdentifier"];
+
+    if (isMissingField(config, requiredFields, logger)) {
+      return null;
+    }
+
+    logger.debug({ at: "createPriceFeed", message: "Creating KapsarcApiPriceFeed", config });
+
+    return new KapsarcApiPriceFeed(
+      logger,
+      providedWeb3,
+      config.lookback,
+      config.datasetIdentifier
+      networker,
+      getTime,
+      config.minTimeBetweenUpdates,
+      config.priceFeedDecimals
     );
   } else if (config.type === "defipulse") {
     const requiredFields = ["lookback", "minTimeBetweenUpdates", "defipulseApiKey", "project"];
