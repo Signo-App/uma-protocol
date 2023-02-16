@@ -21,6 +21,7 @@ import { FallBackPriceFeed } from "./FallBackPriceFeed";
 import { ForexDailyPriceFeed } from "./ForexDailyPriceFeed";
 import { FundingRateMultiplierPriceFeed } from "./FundingRateMultiplierPriceFeed";
 import { InvalidPriceFeedMock } from "./InvalidPriceFeedMock";
+import { KapsarcApiPriceFeed } from "./KapsarcApiPriceFeed";
 import { LPPriceFeed } from "./LPPriceFeed";
 import { MedianizerPriceFeed } from "./MedianizerPriceFeed";
 import { PriceFeedMockScaled } from "./PriceFeedMockScaled";
@@ -193,6 +194,25 @@ export async function createPriceFeed(
       config.minTimeBetweenUpdates,
       config.priceFeedDecimals,
       config.project
+    );
+  } else if (config.type === "Kapsarc-api") {
+    const requiredFields = ["lookback", "datasetIdentifier"];
+
+    if (isMissingField(config, requiredFields, logger)) {
+      return null;
+    }
+
+    logger.debug({ at: "createPriceFeed", message: "Creating KapsarcApiPriceFeed", config });
+
+    return new KapsarcApiPriceFeed(
+      logger,
+      providedWeb3,
+      config.lookback,
+      config.datasetIdentifier
+      networker,
+      getTime,
+      config.minTimeBetweenUpdates,
+      config.priceFeedDecimals
     );
   } else if (config.type === "medianizer") {
     const requiredFields = ["medianizedFeeds"];
