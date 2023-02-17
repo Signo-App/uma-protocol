@@ -29,6 +29,7 @@ import { TraderMadePriceFeed } from "./TraderMadePriceFeed";
 import { UniswapV2PriceFeed, UniswapV3PriceFeed } from "./UniswapPriceFeed";
 import { VaultPriceFeed, HarvestVaultPriceFeed } from "./VaultPriceFeed";
 import { InsuredBridgePriceFeed } from "./InsuredBridgePriceFeed";
+import { TwelveDataApiPriceFeed } from "./TwelveDataApiPriceFeed";
 import { USPACPriceFeed } from "./USPACPriceFeed";
 import { MarketStackPriceFeed } from "./MarketStackPriceFeed";
 
@@ -517,6 +518,26 @@ export async function createPriceFeed(
       config.correctionFactor,
       config.rapidApiKey,
       config.interval,
+      config.lookback,
+      networker,
+      getTime,
+      config.priceFeedDecimals,
+      config.minTimeBetweenUpdates
+    );
+  } else if (config.type === "TwelveData-api") {
+    const requiredFields = ["index", "apiQueryInterval", "lookback", "apiKey"];
+
+    if (isMissingField(config, requiredFields, logger)) {
+      return null;
+    }
+
+    logger.debug({ at: "createPriceFeed", message: "Creating TwelveDataApiPriceFeed", config });
+
+    return new TwelveDataApiPriceFeed(
+      logger,
+      config.index,
+      config.apiQueryInterval,
+      config.apiKey,
       config.lookback,
       networker,
       getTime,
