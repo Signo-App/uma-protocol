@@ -61,17 +61,18 @@ export class TwelveDataApiPriceFeed extends PriceFeedInterface {
       return;
     }
 
+    const TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const startLookbackWindow = currentTime - this.lookback;
+    const startDateTimeString = this._secondToDateTime(startLookbackWindow);
+    const endDateTimeString = this._secondToDateTime(currentTime);
+
     this.logger.debug({
       at: "TwelveDataApiPriceFeed",
       message: "Updating TwelveDataApiPriceFeed",
       currentTime: currentTime,
       lastUpdateTimestamp: this.lastUpdateTime,
+      timezone: TIMEZONE,
     });
-
-    const TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const startLookbackWindow = currentTime - this.lookback;
-    const startDateTimeString = this._secondToDateTime(startLookbackWindow);
-    const endDateTimeString = this._secondToDateTime(currentTime);
 
     // 1. Construct URL.
     // See https://twelvedata.com/docs#getting-started
