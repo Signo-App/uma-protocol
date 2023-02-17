@@ -28,12 +28,13 @@ export class TwelveDataApiPriceFeed extends PriceFeedInterface {
   constructor(
     private readonly logger: Logger,
     private readonly index: string,
+    private readonly apiQueryInterval: string,
     private readonly apiKey: string,
-    private readonly lookback: number,
+    private readonly lookback: number, // lookback should ideally be 4 days to account for NYSE weekends and holidays
     private readonly networker: NetworkerInterface,
     private readonly getTime: () => Promise<number>,
     private readonly priceFeedDecimals = 18,
-    private readonly minTimeBetweenUpdates = 43200 // 12 hours is a reasonable default since this pricefeed returns daily granularity at best.
+    private readonly minTimeBetweenUpdates = 900 // 15 mins is a reasonable default since this API uses an interval of 15min
   ) {
     super();
 
@@ -42,16 +43,9 @@ export class TwelveDataApiPriceFeed extends PriceFeedInterface {
     this.priceHistory = [];
 
     this.convertPriceFeedDecimals = (number) => {
-      // Converts price result to wei
-      // returns price conversion to correct decimals as a big number.
-      // Note: Must ensure that `number` has no more decimal places than `priceFeedDecimals`.
       return Web3.utils.toBN(parseFixed(number.toString().substring(0, priceFeedDecimals), priceFeedDecimals).toString());
     };
   }
-  // Updates the internal state of the price feed. Should pull in any async data so the get*Price methods can be called.
-  // Will use the optional ancillary data parameter to customize what kind of data get*Price returns.
-  // Note: derived classes *must* override this method.
-  // Note: Eventually `update` will be removed in favor of folding its logic into `getCurrentPrice`.
   public async update(ancillaryData?: string): Promise<void> {
     const currentTime = await this.getTime();
 
@@ -74,23 +68,26 @@ export class TwelveDataApiPriceFeed extends PriceFeedInterface {
       lastUpdateTimestamp: this.lastUpdateTime,
     });
 
+    const TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const startLookbackWindow = currentTime - this.lookback;
-    const startDateString = this._secondToDateTime(startLookbackWindow);
-    const endDateString = this._secondToDateTime(currentTime);
-
-    console.log("DEBUG-URTH: Logging here too");
+    const startDateTimeString = this._secondToDateTime(startLookbackWindow);
+    const endDateTimeString = this._secondToDateTime(currentTime);
 
     // 1. Construct URL.
     // See https://twelvedata.com/docs#getting-started
-    // Timeseries API with date range, results are ordered in time descending
-    // https://api.twelvedata.com/time_series?apikey=API_KEY=1h&symbol=SYMBOL&start_date=START_DATE&end_date=END_DATE;
-    const url = `https://api.twelvedata.com/time_series?apikey=8c28e2ab6088439e92a60426194469af&interval=1h&symbol=URTH&start_date=2023-02-10 09:30:00&end_date=2023-02-13 20:00:00`;
-
-    console.log("DEBUG-Twelve: url", url);
+    // We use current local bot timezone to query and get the result in that timezone.
+    // https://api.twelvedata.com/time_series?apikey=API_KEY&interval=15min&timezone=TIMEZONE&order=ASC&symbol=SYMBOL&start_date=START_DATE&end_date=END_DATE;
+    const url = `https://api.twelvedata.com/time_series?` +
+      `apikey=${this.apiKey}` +
+      `&interval=${this.apiQueryInterval}` +
+      `&timezone=${TIMEZONE}` +
+      `&order=ASC` +
+      `&symbol=${this.index}` +
+      `&start_date=${startDateTimeString}` +
+      `&end_date=${endDateTimeString}`;
 
     // 2. Send request.
     const historyResponse = await this.networker.getJson(url);
-    console.log("DEBUG-TWELVEDATA: ", historyResponse);
 
     // Sample Response
     // {
@@ -135,23 +132,17 @@ export class TwelveDataApiPriceFeed extends PriceFeedInterface {
     // historyResponse.values
     const newHistoricalPricePeriods =
       historyResponse.values
-        .map((dailyData: any) => ({
-          date: this._dateTimeToSecond(dailyData.datetime),
-          closePrice: this.convertPriceFeedDecimals(dailyData.close),
-        }))
-        .sort((a: any, b: any) => {
-          // Sorts the data such that the most recent elements come first.
-          return b.date - a.date;
-        });
-
+        .map((dailyData: any) => {
+          return {
+            date: this._dateTimeToSecond(dailyData.datetime),
+            closePrice: this.convertPriceFeedDecimals(dailyData.close),
+          }
+        })
 
     // 5. Store results.
     this.currentPrice = newHistoricalPricePeriods[newHistoricalPricePeriods.length - 1].closePrice;
     this.priceHistory = newHistoricalPricePeriods;
     this.lastUpdateTime = currentTime;
-
-    console.log("DEBUG-URTH: ", this.currentPrice?.toString());
-    console.log("DEBUG-URTH: ", this.priceHistory);
 
   }
 
@@ -182,14 +173,20 @@ export class TwelveDataApiPriceFeed extends PriceFeedInterface {
     // If the time is before the first piece of data in the set, return null because
     // the price is before the lookback window.
     if (time < firstPrice.date) {
-      throw new Error(`${this.uuid}: time ${time} is before firstPricePeriod.openTime`);
+      throw new Error(`${this.uuid}: time ${time} is before firstPricePeriod.closeTime`);
     }
 
     // historicalPricePeriods are ordered from oldest to newest.
-    // This finds the first pricePeriod whose closeTime is after the provided time.
-    const match = this.priceHistory.find((pricePeriod) => {
+    // This finds the first index in pricePeriod whose time is before the provided time.
+    const matchedIndex = this.priceHistory.findIndex((pricePeriod) => {
       return time < pricePeriod.date;
     });
+
+    // Then we get the previous element to matchedIndex. Since that would be the last closing price for us.
+    let match = undefined;
+    if (matchedIndex > 0) {
+      match = this.priceHistory[matchedIndex - 1];
+    }
 
     // If there is no match, that means that the time was past the last data point.
     // In this case, the best match for this price is the current price.
@@ -212,7 +209,7 @@ export class TwelveDataApiPriceFeed extends PriceFeedInterface {
     returnPrice = match.closePrice;
     if (verbose) {
       console.group(`\n(${this.index}) Historical price @ ${match.date}`);
-      console.log(`- ✅ Open Price:${Web3.utils.fromWei(returnPrice.toString())}`);
+      console.log(`- ✅ Close Price:${Web3.utils.fromWei(returnPrice.toString())}`);
       console.groupEnd();
     }
     return returnPrice;
@@ -231,13 +228,13 @@ export class TwelveDataApiPriceFeed extends PriceFeedInterface {
   }
 
   private _secondToDateTime(inputSecond: number) {
-    return moment.unix(inputSecond).format("YYYY-MM-DD");
+    return moment.unix(inputSecond).format("YYYY-MM-DD HH:mm:ss");
   }
   private _dateTimeToSecond(inputDateTime: string, endOfDay = false) {
     if (endOfDay) {
-      return moment(inputDateTime, "YYYY-MM-DD").endOf("day").unix();
+      return moment(inputDateTime, "YYYY-MM-DD HH:mm:ss").endOf("day").unix();
     } else {
-      return moment(inputDateTime, "YYYY-MM-DD").unix();
+      return moment(inputDateTime, "YYYY-MM-DD HH:mm:ss").unix();
     }
   }
 }

@@ -525,7 +525,7 @@ export async function createPriceFeed(
       config.minTimeBetweenUpdates
     );
   } else if (config.type === "TwelveData-api") {
-    const requiredFields = ["index", "lookback", "apiKey"];
+    const requiredFields = ["index", "apiQueryInterval", "lookback", "apiKey"];
 
     if (isMissingField(config, requiredFields, logger)) {
       return null;
@@ -536,6 +536,7 @@ export async function createPriceFeed(
     return new TwelveDataApiPriceFeed(
       logger,
       config.index,
+      config.apiQueryInterval,
       config.apiKey,
       config.lookback,
       networker,
