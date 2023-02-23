@@ -9,7 +9,7 @@ import Web3 from "web3";
 export class StLouisFedGovPriceFeed extends PriceFeedInterface {
   private readonly uuid: string;
   private readonly convertPriceFeedDecimals: (number: number | string | BN) => BN;
-  private priceHistory: { date: number; openPrice: BN }[];
+  private priceHistory: { date: number; value: BN }[];
   private currentPrice: BN | null = null;
   private lastUpdateTime: number | null = null;
 
@@ -25,7 +25,7 @@ export class StLouisFedGovPriceFeed extends PriceFeedInterface {
    * @param {Integer} minTimeBetweenUpdates Min number of seconds between updates. If update() is called again before
    *      this number of seconds has passed, it will be a no-op.
    */
-   constructor(
+  constructor(
     private readonly logger: Logger,
     private readonly symbolString: String,
     private readonly apiKey: string,
@@ -42,51 +42,10 @@ export class StLouisFedGovPriceFeed extends PriceFeedInterface {
     this.priceHistory = [];
 
     this.convertPriceFeedDecimals = (number) => {
-      // Converts price result to wei
-      // returns price conversion to correct decimals as a big number.
-      // Note: Must ensure that `number` has no more decimal places than `priceFeedDecimals`.
       return Web3.utils.toBN(parseFixed(number.toString().substring(0, priceFeedDecimals), priceFeedDecimals).toString());
     };
   }
-  private async _getHistoricalPrice(time: number) : Promise<BN | null> {
-    const dataFetchStartTime = time - (60*60*24*60) // good guarantee to get at least 1 data point, assuming monthly data points
 
-    // dataFetchStart gives an "early bound" to our data
-    const dataFetchStartString = this._secondToDateTime(dataFetchStartTime);
-
-    // realtimeEndString is essentially specifying when in history to "look from", i.e. what did the data look like at a specific time?
-    // This is because these data can change and be revised. We want to stay true to what operators/users knew at the time.
-    // see https://fred.stlouisfed.org/docs/api/fred/realtime_period.html
-    const realtimeEndString = this._secondToDateTime(time);
-
-    const url =
-      "https://api.stlouisfed.org/fred/series/observations?file_type=json" +
-      `&series_id=${this.symbolString}&api_key=${this.apiKey}` +
-      `&observation_start=${dataFetchStartString}&realtime_end=${realtimeEndString}`
-    
-    const fetchResponse = await this.networker.getJson(url);
-
-    if (
-      !(fetchResponse?.observations) ||
-      fetchResponse.observations.length === 0
-    ) {
-      throw new Error(`🚨Could not parse price result from url ${url}: ${JSON.stringify(fetchResponse)}`);
-    }
-
-    const observations = fetchResponse.observations
-      .map((observation: any) => ({
-        date: this._dateTimeToSecond(observation.date),
-        price: this.convertPriceFeedDecimals(observation.value)
-      }))
-      .sort((a: any, b: any) => {
-        return a.date - b.date;
-      });
-    
-    return observations[observations.length-1].price;
-  }
-  // Most price feeds should update the current time and historical time, and "getter" functions then retrieve this
-  // However, due to the way the api returns data, this is an infeasible approach for historical data.
-  // Thus this function just updates the current time.
   public async update(ancillaryData?: string): Promise<void> {
     const currentTime = await this.getTime();
 
@@ -102,33 +61,147 @@ export class StLouisFedGovPriceFeed extends PriceFeedInterface {
       return;
     }
 
+    // start date is 60 days in the past, this is done to ensure we get a value for CPI
+    const startLookbackWindow = currentTime - this.lookback;
+    const startDateString = this._secondToDate(startLookbackWindow);
+
     this.logger.debug({
       at: "StLouisFedGovPriceFeed",
-      message: "Updating StLouisFedGovPriceFeed (only for current price)",
+      message: "Updating StLouisFedGovPriceFeed",
       currentTime: currentTime,
-      lastUpdateTimestamp: this.lastUpdateTime,
+      lastUpdateTimestamp: this.lastUpdateTime
     });
-    
-    this.currentPrice = await this._getHistoricalPrice(currentTime);
+
+    // 1. Construct URL.
+    // See https://fred.stlouisfed.org/docs/api/fred/
+    // https://api.stlouisfed.org/fred/series/observations?series_id=CPIAUCSL&api_key=API_KEY&file_type=json&observation_start=START_DATE
+    const url = `https://api.stlouisfed.org/fred/series/observations?` +
+      `&file_type=json` +
+      `&api_key=${this.apiKey}` +
+      `&series_id=${this.symbolString}` +
+      `&observation_start=${startDateString}`;
+
+    // 2. Send request.
+    const historyResponse = await this.networker.getJson(url);
+
+    // Sample Response
+    // {
+    //   "realtime_start": "2023-02-23",
+    //   "realtime_end": "2023-02-23",
+    //   "observation_start": "2022-10-24",
+    //   "observation_end": "9999-12-31",
+    //   "units": "lin",
+    //   "output_type": 1,
+    //   "file_type": "json",
+    //   "order_by": "observation_date",
+    //   "sort_order": "asc",
+    //   "count": 4,
+    //   "offset": 0,
+    //   "limit": 100000,
+    //   "observations": [
+    //   {
+    //   "realtime_start": "2023-02-23",
+    //   "realtime_end": "2023-02-23",
+    //   "date": "2022-10-01",
+    //   "value": "297.987"
+    //   },
+    // ...
+    //   {
+    //   "realtime_start": "2023-02-23",
+    //   "realtime_end": "2023-02-23",
+    //   "date": "2023-01-01",
+    //   "value": "300.536"
+    //   }
+    //   ]
+    //   }
+
+    // 3. Check responses.
+    if (!historyResponse?.observations || historyResponse.observations.length === 0) {
+      throw new Error(`🚨Could not parse price result from url ${url}: ${JSON.stringify(historyResponse)}`);
+    }
+
+    // 4. Parse results.
+    // historyResponse.observations
+    const newHistoricalPricePeriods =
+      historyResponse.observations
+        .map((dailyData: any) => {
+          return {
+            date: this._dateToSecond(dailyData.date),
+            value: this.convertPriceFeedDecimals(dailyData.value),
+          }
+        })
+
+    console.log("DEBUG: USCPI: newHistoricalPricePeriods", newHistoricalPricePeriods);
+
+    // 5. Store results.
+    this.currentPrice = newHistoricalPricePeriods[newHistoricalPricePeriods.length - 1].value;
+    this.priceHistory = newHistoricalPricePeriods;
     this.lastUpdateTime = currentTime;
   }
 
   public getCurrentPrice(): BN | null {
     return this.currentPrice;
   }
-  // For most price feeds, getHistoricalPrice should be a local getter, which just returns cached data found during update()
-  // However, due to the way the api returns data, this is an infeasible approach for historical data.
-  // Thus this function performs the fetch in real-time.
-  public async getHistoricalPrice(time: number, ancillaryData?: string, verbose?: boolean): Promise<BN | null> {
-    const returnPrice = this._getHistoricalPrice(time);
 
-    if (!returnPrice) {
-      throw new Error(`${this.uuid}: can't get historical data for that time`);
+  public async getHistoricalPrice(time: number, ancillaryData?: string, verbose?: boolean): Promise<BN | null> {
+    if (this.lastUpdateTime === undefined) {
+      throw new Error(`${this.uuid}: undefined lastUpdateTime`);
     }
 
+    // Set first price period in `historicalPricePeriods` to first non-null price.
+    let firstPrice;
+    for (const p in this.priceHistory) {
+      if (this.priceHistory[p] && this.priceHistory[p].date) {
+        firstPrice = this.priceHistory[p];
+        break;
+      }
+    }
+
+    // If there are no valid price periods, return null.
+    if (!firstPrice) {
+      throw new Error(`${this.uuid}: no valid price periods`);
+    }
+
+    // If the time is before the first piece of data in the set, return null because
+    // the price is before the lookback window.
+    if (time < firstPrice.date) {
+      throw new Error(`${this.uuid}: time ${time} is before firstPricePeriod.closeTime`);
+    }
+
+    // historicalPricePeriods are ordered from oldest to newest.
+    // This finds the first index in pricePeriod whose time is before the provided time.
+    const matchedIndex = this.priceHistory.findIndex((pricePeriod) => {
+      return time < pricePeriod.date;
+    });
+
+    // Then we get the previous element to matchedIndex. Since that would be the last closing price for us.
+    let match = undefined;
+    if (matchedIndex > 0) {
+      match = this.priceHistory[matchedIndex - 1];
+    }
+
+    // If there is no match, that means that the time was past the last data point.
+    // In this case, the best match for this price is the current price.
+    let returnPrice;
+    if (match === undefined) {
+      if (this.currentPrice === null) throw new Error(`${this.uuid}: currentPrice is null`);
+      returnPrice = this.currentPrice;
+      if (verbose) {
+        console.group(`\n(${this.symbolString}) No price available @ ${time}`);
+        console.log(
+          `- ✅ Time is later than earliest historical time, fetching current price: ${Web3.utils.fromWei(
+            returnPrice.toString()
+          )}`
+        );
+        console.groupEnd();
+      }
+      return returnPrice;
+    }
+
+    returnPrice = match.value;
     if (verbose) {
-      console.group(`\n(${this.symbolString}) Historical price @ ${time}`);
-      console.log(`- ✅ Price:${Web3.utils.fromWei(returnPrice.toString())}`);
+      console.group(`\n(${this.symbolString}) Historical price @ ${match.date}`);
+      console.log(`- ✅ Close Price:${Web3.utils.fromWei(returnPrice.toString())}`);
       console.groupEnd();
     }
     return returnPrice;
@@ -146,10 +219,10 @@ export class StLouisFedGovPriceFeed extends PriceFeedInterface {
     return this.priceFeedDecimals;
   }
 
-  private _secondToDateTime(inputSecond: number) {
+  private _secondToDate(inputSecond: number) {
     return moment.unix(inputSecond).format("YYYY-MM-DD");
   }
-  private _dateTimeToSecond(inputDateTime: string, endOfDay = false) {
+  private _dateToSecond(inputDateTime: string, endOfDay = false) {
     if (endOfDay) {
       return moment(inputDateTime, "YYYY-MM-DD").endOf("day").unix();
     } else {

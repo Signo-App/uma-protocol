@@ -178,7 +178,7 @@ export class TwelveDataApiPriceFeed extends PriceFeedInterface {
     }
 
     // historicalPricePeriods are ordered from oldest to newest.
-    // This finds the first index in pricePeriod whose time is before the provided time.
+    // This finds the first index in pricePeriod whose time is after the provided time.
     const matchedIndex = this.priceHistory.findIndex((pricePeriod) => {
       return time < pricePeriod.date;
     });
