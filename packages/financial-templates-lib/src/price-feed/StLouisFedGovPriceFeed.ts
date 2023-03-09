@@ -61,10 +61,6 @@ export class StLouisFedGovPriceFeed extends PriceFeedInterface {
       return;
     }
 
-    // start date is 60 days in the past, this is done to ensure we get a value for CPI
-    const startLookbackWindow = currentTime - this.lookback;
-    const startDateString = this._secondToDate(startLookbackWindow);
-
     this.logger.debug({
       at: "StLouisFedGovPriceFeed",
       message: "Updating StLouisFedGovPriceFeed",
@@ -72,17 +68,37 @@ export class StLouisFedGovPriceFeed extends PriceFeedInterface {
       lastUpdateTimestamp: this.lastUpdateTime
     });
 
+    this.currentPrice = await this._getHistoricalPrice(currentTime);
+    this.lastUpdateTime = currentTime;
+  }
+
+  public getCurrentPrice(): BN | null {
+    return this.currentPrice;
+  }
+
+  private async _getHistoricalPrice(time: number): Promise<BN | null> {
+    const dataFetchStartTime = time - (60 * 60 * 24 * 60) // good guarantee to get at least 1 data point, assuming monthly data points
+
+    // dataFetchStart gives an "early bound" to our data
+    const dataFetchStartString = this._secondToDate(dataFetchStartTime);
+
+    // realtimeEndString is essentially specifying when in history to "look from", i.e. what did the data look like at a specific time?
+    // This is because these data can change and be revised. We want to stay true to what operators/users knew at the time.
+    // see https://fred.stlouisfed.org/docs/api/fred/realtime_period.html
+    const realtimeEndString = this._secondToDate(time);
+
     // 1. Construct URL.
     // See https://fred.stlouisfed.org/docs/api/fred/
-    // https://api.stlouisfed.org/fred/series/observations?series_id=CPIAUCSL&api_key=API_KEY&file_type=json&observation_start=START_DATE
+    // https://api.stlouisfed.org/fred/series/observations?series_id=CPIAUCSL&api_key=API_KEY&file_type=json&observation_start=START_DATE&realtime_end=REAL_END_DATE
     const url = `https://api.stlouisfed.org/fred/series/observations?` +
       `&file_type=json` +
       `&api_key=${this.apiKey}` +
       `&series_id=${this.symbolString}` +
-      `&observation_start=${startDateString}`;
+      `&observation_start=${dataFetchStartString}` +
+      `&realtime_end=${realtimeEndString}`
 
     // 2. Send request.
-    const historyResponse = await this.networker.getJson(url);
+    const fetchResponse = await this.networker.getJson(url);
 
     // Sample Response
     // {
@@ -116,93 +132,37 @@ export class StLouisFedGovPriceFeed extends PriceFeedInterface {
     //   }
 
     // 3. Check responses.
-    if (!historyResponse?.observations || historyResponse.observations.length === 0) {
-      throw new Error(`🚨Could not parse price result from url ${url}: ${JSON.stringify(historyResponse)}`);
+    if (
+      !(fetchResponse?.observations) ||
+      fetchResponse.observations.length === 0
+    ) {
+      throw new Error(`🚨Could not parse price result from url ${url}: ${JSON.stringify(fetchResponse)}`);
     }
 
     // 4. Parse results.
     // historyResponse.observations
-    const newHistoricalPricePeriods =
-      historyResponse.observations
-        .map((dailyData: any) => {
-          return {
-            date: this._dateToSecond(dailyData.date),
-            value: this.convertPriceFeedDecimals(dailyData.value),
-          }
-        })
+    const observations = fetchResponse.observations
+      .map((observation: any) => ({
+        date: this._dateToSecond(observation.date),
+        price: this.convertPriceFeedDecimals(observation.value)
+      }))
+      .sort((a: any, b: any) => {
+        return a.date - b.date;
+      });
 
-    console.log("DEBUG: USCPI: newHistoricalPricePeriods", newHistoricalPricePeriods);
-
-    // 5. Store results.
-    this.currentPrice = newHistoricalPricePeriods[newHistoricalPricePeriods.length - 1].value;
-    this.priceHistory = newHistoricalPricePeriods;
-    this.lastUpdateTime = currentTime;
-  }
-
-  public getCurrentPrice(): BN | null {
-    return this.currentPrice;
+    return observations[observations.length - 1].price;
   }
 
   public async getHistoricalPrice(time: number, ancillaryData?: string, verbose?: boolean): Promise<BN | null> {
-    if (this.lastUpdateTime === undefined) {
-      throw new Error(`${this.uuid}: undefined lastUpdateTime`);
+    const returnPrice = this._getHistoricalPrice(time);
+
+    if (!returnPrice) {
+      throw new Error(`${this.uuid}: can't get historical data for that time`);
     }
 
-    // Set first price period in `historicalPricePeriods` to first non-null price.
-    let firstPrice;
-    for (const p in this.priceHistory) {
-      if (this.priceHistory[p] && this.priceHistory[p].date) {
-        firstPrice = this.priceHistory[p];
-        break;
-      }
-    }
-
-    // If there are no valid price periods, return null.
-    if (!firstPrice) {
-      throw new Error(`${this.uuid}: no valid price periods`);
-    }
-
-    // If the time is before the first piece of data in the set, return null because
-    // the price is before the lookback window.
-    if (time < firstPrice.date) {
-      throw new Error(`${this.uuid}: time ${time} is before firstPricePeriod.closeTime`);
-    }
-
-    // historicalPricePeriods are ordered from oldest to newest.
-    // This finds the first index in pricePeriod whose time is before the provided time.
-    const matchedIndex = this.priceHistory.findIndex((pricePeriod) => {
-      return time < pricePeriod.date;
-    });
-
-    // Then we get the previous element to matchedIndex. Since that would be the last closing price for us.
-    let match = undefined;
-    if (matchedIndex > 0) {
-      match = this.priceHistory[matchedIndex - 1];
-    }
-
-    // If there is no match, that means that the time was past the last data point.
-    // In this case, the best match for this price is the current price.
-    let returnPrice;
-    if (match === undefined) {
-      if (this.currentPrice === null) throw new Error(`${this.uuid}: currentPrice is null`);
-      returnPrice = this.currentPrice;
-      if (verbose) {
-        console.group(`\n(${this.symbolString}) No price available @ ${time}`);
-        console.log(
-          `- ✅ Time is later than earliest historical time, fetching current price: ${Web3.utils.fromWei(
-            returnPrice.toString()
-          )}`
-        );
-        console.groupEnd();
-      }
-      return returnPrice;
-    }
-
-    returnPrice = match.value;
     if (verbose) {
-      console.group(`\n(${this.symbolString}) Historical price @ ${match.date}`);
-      console.log(`- ✅ Close Price:${Web3.utils.fromWei(returnPrice.toString())}`);
-      console.groupEnd();
+      console.group(`\n(${this.symbolString}) Historical price @ ${time}`);
+      console.log(`- ✅ Price:${Web3.utils.fromWei(returnPrice.toString())}`);
     }
     return returnPrice;
   }
