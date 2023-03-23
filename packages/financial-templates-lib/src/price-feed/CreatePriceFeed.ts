@@ -25,6 +25,7 @@ import { LPPriceFeed } from "./LPPriceFeed";
 import { MedianizerPriceFeed } from "./MedianizerPriceFeed";
 import { PriceFeedMockScaled } from "./PriceFeedMockScaled";
 import { QuandlPriceFeed } from "./QuandlPriceFeed";
+import { StatisticsNetherlandsPriceFeed } from './StatisticsNetherlandsPriceFeed';
 import { TraderMadePriceFeed } from "./TraderMadePriceFeed";
 import { UniswapV2PriceFeed, UniswapV3PriceFeed } from "./UniswapPriceFeed";
 import { VaultPriceFeed, HarvestVaultPriceFeed } from "./VaultPriceFeed";
@@ -582,7 +583,25 @@ export async function createPriceFeed(
       config.priceFeedDecimals,
       config.minTimeBetweenUpdates
     );
-  } else if (config.type === "commodities-api") {
+  } else if (config.type === "statisticsNetherlands-api") {
+    const requiredFields = ["lookback", "symbolString"];
+
+    if (isMissingField(config, requiredFields, logger)) {
+      return null;
+    }
+
+    logger.debug({ at: "createPriceFeed", message: "Creating StatisticsNetherlandsPriceFeed", config });
+
+    return new StatisticsNetherlandsPriceFeed(
+      logger,
+      config.symbolString,
+      config.lookback,
+      networker,
+      getTime,
+      config.priceFeedDecimals,
+      config.minTimeBetweenUpdates
+    ); 
+  }  else if (config.type === "commodities-api") {
     const requiredFields = ["lookback", "baseCurrency", "commodity", "apiKey"];
 
     if (isMissingField(config, requiredFields, logger)) {
