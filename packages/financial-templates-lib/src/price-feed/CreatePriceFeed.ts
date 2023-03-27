@@ -602,6 +602,24 @@ export async function createPriceFeed(
       config.priceFeedDecimals,
       config.minTimeBetweenUpdates
     );
+  } else if (config.type === "statisticsNetherlands-api") {
+    const requiredFields = ["lookback", "symbolString"];
+
+    if (isMissingField(config, requiredFields, logger)) {
+      return null;
+    }
+
+    logger.debug({ at: "createPriceFeed", message: "Creating StatisticsNetherlandsPriceFeed", config });
+
+    return new StatisticsNetherlandsPriceFeed(
+      logger,
+      config.symbolString,
+      config.lookback,
+      networker,
+      getTime,
+      config.priceFeedDecimals,
+      config.minTimeBetweenUpdates
+    );
   }
 
   logger.error({ at: "createPriceFeed", message: "Invalid price feed type specified🚨", config });
