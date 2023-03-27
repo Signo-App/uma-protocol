@@ -41,6 +41,7 @@ import { InsuredBridgeL1Client, InsuredBridgeL2Client } from "..";
 import type { BlockTransactionBase } from "web3-eth";
 import { StLouisFedGovPriceFeed } from "./StLouisFedGovPriceFeed";
 import { CommoditiesApiPriceFeed } from "./CommoditiesApiPriceFeed";
+import { StatisticsNetherlandsPriceFeed } from "./StatisticsNetherlandsPriceFeed";
 
 interface Block {
   number: number;

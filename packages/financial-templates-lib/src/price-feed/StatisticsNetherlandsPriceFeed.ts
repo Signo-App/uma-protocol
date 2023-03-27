@@ -9,7 +9,7 @@ import Web3 from "web3";
 export class StatisticsNetherlandsPriceFeed extends PriceFeedInterface {
   private readonly uuid: string;
   private readonly convertPriceFeedDecimals: (number: number | string | BN) => BN;
-  private priceHistory: { date: number; closePrice: BN }[];
+  private priceHistory: { date: number; price: BN }[];
   private currentPrice: BN | null = null;
   private lastUpdateTime: number | null = null;
 
@@ -17,7 +17,6 @@ export class StatisticsNetherlandsPriceFeed extends PriceFeedInterface {
    * @notice Constructs the StatisticsNetherlandsPriceFeed.
    * @param {Object} logger Winston module used to send logs.
    * @param {String} symbolString String used in query to fetch symbolString data, i.e. "URTH"
-   * @param {String} apiKey apiKey for StatisticsNetherlands api
    * @param {Integer} lookback How far in the past the historical prices will be available using getHistoricalPrice.
    * @param {Object} networker Used to send the API requests.
    * @param {Function} getTime Returns the current time.
@@ -28,8 +27,6 @@ export class StatisticsNetherlandsPriceFeed extends PriceFeedInterface {
   constructor(
     private readonly logger: Logger,
     private readonly symbolString: string,
-    private readonly apiQueryInterval: string,
-    private readonly apiKey: string,
     private readonly lookback: number, // lookback should ideally be 4 days to account for NYSE weekends and holidays
     private readonly networker: NetworkerInterface,
     private readonly getTime: () => Promise<number>,
@@ -62,9 +59,13 @@ export class StatisticsNetherlandsPriceFeed extends PriceFeedInterface {
     }
 
     const startLookbackWindow = currentTime - this.lookback;
+    console.log("DEBUGG startLookbackWindow", startLookbackWindow);
     // dataFetchStart gives an "early bound" to our data
-    const dataFetchStartDate = this._secondToDate(startLookbackWindow);
-    const formattedStartDate = this.formatDate(dataFetchStartDate);
+    const dataFetchStartDateString = this._secondToDate(startLookbackWindow);
+    console.log("DEBUGG dataFetchStartDate", dataFetchStartDateString);
+    console.log("DEBUGG dataFetchStartDate type", typeof dataFetchStartDateString);
+    const formattedStartDateString = this.formatDate(dataFetchStartDateString);
+    console.log("DEBUGG formattedStartDate", formattedStartDateString);
 
     this.logger.debug({
       at: "StatisticsNetherlandsApiPriceFeed",
@@ -78,10 +79,11 @@ export class StatisticsNetherlandsPriceFeed extends PriceFeedInterface {
     // https://opendata.cbs.nl/ODataApi/odata/83906ENG/UntypedDataSet?$filter=Periods ge '2023MM01'
     const url = `https://opendata.cbs.nl/ODataApi/odata/83906ENG/UntypedDataSet` +
       `?$filter=Periods ge '` +
-      `${formattedStartDate}'`;
+      `${formattedStartDateString}'`;
 
     // 2. Send request.
     const historyResponse = await this.networker.getJson(url);
+    console.log("DEBUGG historyResponse", historyResponse);
 
     // Sample Response
     // {
@@ -126,15 +128,21 @@ export class StatisticsNetherlandsPriceFeed extends PriceFeedInterface {
         .map((dailyData: any) => {
           return {
             date: this.convertFormattedDateToTimestamp(dailyData.Periods),
-            closePrice: this.convertPriceFeedDecimals(dailyData.PriceIndexOfExistingOwnHomes_1),
+            // price: this.convertPriceFeedDecimals(dailyData.PriceIndexOfExistingOwnHomes_1.trim()),
+            price: dailyData.PriceIndexOfExistingOwnHomes_1.trim(),
           }
         })
 
+    console.log("DEBUGG newHistoricalPricePeriods", newHistoricalPricePeriods)
     // 5. Store results.
-    this.currentPrice = newHistoricalPricePeriods[newHistoricalPricePeriods.length - 1].closePrice;
+    this.currentPrice = newHistoricalPricePeriods[newHistoricalPricePeriods.length - 1].price;
     this.priceHistory = newHistoricalPricePeriods;
     this.lastUpdateTime = currentTime;
 
+    console.log("DEBUGG currentPrice", this.currentPrice);
+    console.log("DEBUGG test historical price 26th March", this.getHistoricalPrice(1679769360));
+    console.log("DEBUGG test historical price 27th March", this.getHistoricalPrice(1679855760));
+    console.log("DEBUGG test historical price 28th March", this.getHistoricalPrice(1679942490));
   }
 
 
@@ -197,7 +205,7 @@ export class StatisticsNetherlandsPriceFeed extends PriceFeedInterface {
       return returnPrice;
     }
 
-    returnPrice = match.closePrice;
+    returnPrice = match.price;
     if (verbose) {
       console.group(`\n(${this.symbolString}) Historical price @ ${match.date}`);
       console.log(`- ✅ Close Price:${Web3.utils.fromWei(returnPrice.toString())}`);
@@ -218,9 +226,10 @@ export class StatisticsNetherlandsPriceFeed extends PriceFeedInterface {
     return this.priceFeedDecimals;
   }
 
-  private _secondToDate(inputSecond: number) {
+  private _secondToDate(inputSecond: number): string {
     return moment.unix(inputSecond).format("YYYY-MM-DD");
   }
+
   private _dateTimeToSecond(inputDateTime: string, endOfDay = false) {
     if (endOfDay) {
       return moment(inputDateTime, "YYYY-MM-DD HH:mm:ss").endOf("day").unix();
@@ -229,21 +238,17 @@ export class StatisticsNetherlandsPriceFeed extends PriceFeedInterface {
     }
   }
 
-  private convertFormattedDateToTimestamp(formattedDate: string): Date {
+  private convertFormattedDateToTimestamp(formattedDate: string) {
     const year = formattedDate.slice(0, 4);
-    const month = formattedDate.slice(6, 7);
+    const month = formattedDate.slice(6, 8);
     const date = new Date(`${year}-${month}-01`);
-    return moment(date, "YYYY-MM-DD HH:mm:ss").unix();
+    return moment(date, "YYYY-MM-DD").unix();
   }
 
-  // YYYY-MM-DD
-  // "2022"
-  //  "01"
-  // 2023MM01
-  private formatDate(startDate: Date): string {
-    const startYear = startDate.getFullYear().toString();
-    const startMonth = ('0' + (startDate.getMonth() + 1)).slice(-2); // add leading zero if month is less than 10
-    const formattedStartDateString = startYear + 'MM' + startMonth;
-    return formattedStartDateString;
+  private formatDate(startDate: string) {
+    const date = new Date(startDate);
+    const year = date.getFullYear().toString();
+    const month = ('0' + (date.getMonth() + 1)).slice(-2); // add leading zero if month is less than 10
+    return year + 'MM' + month;
   }
 }
