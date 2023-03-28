@@ -583,7 +583,7 @@ export async function createPriceFeed(
       config.priceFeedDecimals,
       config.minTimeBetweenUpdates
     );
-  } else if (config.type === "statisticsNetherlands-api") {
+  } else if (config.type === "StatisticsNetherlands-api") {
     const requiredFields = ["lookback", "symbolString"];
 
     if (isMissingField(config, requiredFields, logger)) {

@@ -74,12 +74,13 @@ export class StatisticsNetherlandsPriceFeed extends PriceFeedInterface {
     return this.currentPrice;
   }
 
-  private async fetchFormattedStartDate(startDate: Date): Promise<string> {
-    const startYear = startDate.getFullYear().toString();
-    const startMonth = ('0' + (startDate.getMonth() + 1)).slice(-2); // add leading zero if month is less than 10
-    const formattedStartDateString = startYear + 'MM' + startMonth;
-    return formattedStartDateString;
+  private async fetchFormattedDate(Date: Date): Promise<string> {
+    const Year = Date.getFullYear().toString();
+    const Month = ('0' + (Date.getMonth() + 1)).slice(-2); // add leading zero if month is less than 10
+    const formattedDateString = Year + 'MM' + Month;
+    return formattedDateString;
   }
+
 
   private async _getHistoricalPrice(time: number): Promise<BN | null> {
    try{ 
@@ -87,20 +88,43 @@ export class StatisticsNetherlandsPriceFeed extends PriceFeedInterface {
 
     // dataFetchStart gives an "early bound" to our data
     const dataFetchStartString = this._secondToDate(dataFetchStartTime);
+
+    const dataFetchStartDate = new Date(dataFetchStartString);
     
     // dataFetchStart gives an "early bound" to our data
-    const startDateString = await this.fetchFormattedStartDate(dataFetchStartString);
+    const startDateString = await this.fetchFormattedDate(dataFetchStartDate);
     console.log(startDateString);
 
+    
+    
+    const dataFetchEndTime = time
 
-    // 1. Construct URL.
-    // https://opendata.cbs.nl/ODataApi/odata/83906ENG/UntypedDataSet?$filter=Periods%20eq%20%27YYYYmmMM%27
-    const url = `https://opendata.cbs.nl/ODataApi/odata/83906ENG/UntypedDataSet?` + 
-                `$filter=Periods%20ge%20%27${startDateString}%27`;
-    console.log(url);
+    const dataFetchEndString = this._secondToDate(dataFetchEndTime);
+
+    const dataFetchEndDate = new Date(dataFetchEndString);
+    
+    // dataFetchStart gives an "early bound" to our data
+    const endDateString = await this.fetchFormattedDate(dataFetchEndDate);
+    console.log(endDateString);
+
+  // `https://opendata.cbs.nl/ODataApi/odata/83906ENG/UntypedDataSet?$select=Periods($filter=ge($this, '2022MM01')) 
+  // https://opendata.cbs.nl/ODataApi/odata/83906ENG/UntypedDataSet?$filter=substring(Periods,0,3) + substring(Periods,6) ge '202201' and substring(Periods,0,3) + substring(Periods,6) le '202209'
+
+  // 1. Construct URL.
+  // https://opendata.cbs.nl/ODataApi/odata/83906ENG/UntypedDataSet?$filter=Periods%20ge%20%272022MM02%27
+  const urlStartDate = `https://opendata.cbs.nl/ODataApi/odata/83906ENG/UntypedDataSet?` + 
+    `$filter=Periods ge '${startDateString}'`
+    console.log(urlStartDate);
+  
+  // https://opendata.cbs.nl/ODataApi/odata/83906ENG/UntypedDataSet?$filter=Periods%20gt%20%272022MM10%27  
+  const urlEndDate = `https://opendata.cbs.nl/ODataApi/odata/83906ENG/UntypedDataSet?` + 
+    `$filter=Periods gt '${endDateString}'`
+    console.log(urlEndDate);
 
     // 2. Send request.
-    const fetchResponse = await this.networker.getJson(url);
+    const fetchStartResponse = await this.networker.getJson(urlStartDate);
+    const fetchEndResponse = await this.networker.getJson(urlEndDate);
+    
 
     // Sample Response
     // {
@@ -109,22 +133,48 @@ export class StatisticsNetherlandsPriceFeed extends PriceFeedInterface {
 
     // 3. Check responses.
     if (
-      !(fetchResponse?.value) ||
-      fetchResponse.value.length === 0
+      !(fetchStartResponse?.value) ||
+      fetchStartResponse.value.length === 0
     ) {
-      throw new Error(`🚨Could not parse price result from url ${url}: ${JSON.stringify(fetchResponse)}`);
+      throw new Error(`🚨Could not parse price result from url ${urlStartDate}: ${JSON.stringify(fetchStartResponse)}`);
     }
 
+    if (
+      !(fetchEndResponse?.value) ||
+      fetchEndResponse.value.length === 0
+    ) {
+      throw new Error(`🚨Could not parse price result from url ${urlEndDate}: ${JSON.stringify(fetchEndResponse)}`);
+    }
+
+  
     // 4. Parse results.
     // historyResponse.values
-    const values = fetchResponse.value
+    
+    const startDateValues = fetchStartResponse.value
+    const endDateValues = fetchEndResponse.value
+
+    // 5. filter data
+    const filteredData = startDateValues.filter((startDatum) => {
+      const startPeriods = startDatum.Periods;
+      const matchingQueryData = endDateValues.find((endDatum) => {
+        const endPeriods = endDatum.Periods;
+        return startPeriods === endPeriods;
+      });
+      return !matchingQueryData;
+    });
+    
+    console.log(filteredData);
+
+
+    const filteredValues = filteredData.value
+    const priceIndexObject = filteredData.value.PriceIndexOfExistingOwnHomes_1.trim()
     .map((value: any) => ({
-      date: value.Periods,
-      price: this.convertPriceFeedDecimals(value.PriceIndexOfExistingOwnHomes_1)
+      Date: value.Periods,
+      price: this.convertPriceFeedDecimals(priceIndexObject)
     }))
 
       let mostRecentValue = null;
-        for (const value of values) {
+        for (const value of filteredValues) {
             if (mostRecentValue === null || value['ID'] > mostRecentValue['ID']) {
                 mostRecentValue = value;
             }
