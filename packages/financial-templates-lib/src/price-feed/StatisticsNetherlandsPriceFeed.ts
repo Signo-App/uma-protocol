@@ -133,13 +133,17 @@ export class StatisticsNetherlandsPriceFeed extends PriceFeedInterface {
           }
         })
 
-    console.log("DEBUGG newHistoricalPricePeriods", newHistoricalPricePeriods)
+    console.log("DEBUGG newHistoricalPricePeriods", newHistoricalPricePeriods);
     // 5. Store results.
     this.currentPrice = newHistoricalPricePeriods[newHistoricalPricePeriods.length - 1].price;
     this.priceHistory = newHistoricalPricePeriods;
     this.lastUpdateTime = currentTime;
 
+    // NLHPI updates on the 22nd of every month at 02:00:00
     console.log("DEBUGG currentPrice", this.currentPrice);
+    console.log("DEBUGG test historical price 22 March 2023 01:00:00", this.getHistoricalPrice(1679446800)); // This should return the price for January which was released 22nd February
+    console.log("DEBUGG test historical price 22 March 2023 02:00:00", this.getHistoricalPrice(1679450400)); // This should return the price for February which was released 22nd March 02:00:00
+    console.log("DEBUGG test historical price 22 March 2023 03:00:00", this.getHistoricalPrice(1679454000)); // This should return the price for February which was released 22nd March 02:00:00
     console.log("DEBUGG test historical price 26th March", this.getHistoricalPrice(1679769360));
     console.log("DEBUGG test historical price 27th March", this.getHistoricalPrice(1679855760));
     console.log("DEBUGG test historical price 28th March", this.getHistoricalPrice(1679942490));
@@ -163,6 +167,7 @@ export class StatisticsNetherlandsPriceFeed extends PriceFeedInterface {
         break;
       }
     }
+    console.log("first price:", firstPrice);
 
     // If there are no valid price periods, return null.
     if (!firstPrice) {
@@ -178,14 +183,24 @@ export class StatisticsNetherlandsPriceFeed extends PriceFeedInterface {
     // historicalPricePeriods are ordered from oldest to newest.
     // This finds the first index in pricePeriod whose time is after the provided time.
     const matchedIndex = this.priceHistory.findIndex((pricePeriod) => {
-      return time < pricePeriod.date;
+      console.log("time:", time);
+      console.log("pricePeriod date:", time < pricePeriod.date);
+      if (time === pricePeriod.date) {
+        return true;
+      } else if (time < pricePeriod.date) {
+        return time > pricePeriod.date;
+      } else {
+        return false;
+      }
     });
+    console.log("matched index:", matchedIndex);
 
     // Then we get the previous element to matchedIndex. Since that would be the last closing price for us.
     let match = undefined;
     if (matchedIndex > 0) {
       match = this.priceHistory[matchedIndex - 1];
     }
+    console.log("match:", match);
 
     // If there is no match, that means that the time was past the last data point.
     // In this case, the best match for this price is the current price.
@@ -206,6 +221,8 @@ export class StatisticsNetherlandsPriceFeed extends PriceFeedInterface {
     }
 
     returnPrice = match.price;
+    console.log("match.price:", match.price);
+    console.log("returnPrice:", returnPrice);
     if (verbose) {
       console.group(`\n(${this.symbolString}) Historical price @ ${match.date}`);
       console.log(`- ✅ Close Price:${Web3.utils.fromWei(returnPrice.toString())}`);
@@ -240,9 +257,28 @@ export class StatisticsNetherlandsPriceFeed extends PriceFeedInterface {
 
   private convertFormattedDateToTimestamp(formattedDate: string) {
     const year = formattedDate.slice(0, 4);
-    const month = formattedDate.slice(6, 8);
-    const date = new Date(`${year}-${month}-01`);
-    return moment(date, "YYYY-MM-DD").unix();
+    const monthString = formattedDate.slice(6, 8);
+    const monthNumber = parseInt(monthString, 10);
+    const incrementedMonth = this.incrementMonthAsString(monthNumber);
+    const date = new Date(`${year}-${incrementedMonth}-22T02:00:00`);
+    return moment(date, "YYYY-MM-DD HH:mm:ss").unix();
+  }
+
+  private incrementMonthAsString(month: number): string {
+    let incrementMonth: number;
+    
+    if (month >= 1 && month <= 11) {
+      // If the month is between January (1) and November (11), simply increment by 1
+      incrementMonth = month + 1;
+    } else if (month === 12) {
+      // If the month is December (12), set the month to January (1)
+      incrementMonth = 1;
+    } else {
+      throw new Error('Invalid month value');
+    }
+
+    const incrementMonthString = incrementMonth.toString().padStart(2, '0');
+    return incrementMonthString;
   }
 
   private formatDate(startDate: string) {
