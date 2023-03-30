@@ -140,6 +140,7 @@ export class StatisticsNetherlandsPriceFeed extends PriceFeedInterface {
     this.lastUpdateTime = currentTime;
 
     // NLHPI updates on the 22nd of every month at 02:00:00
+    // TODO: Account for edge case, when 22nd falls on a weekend, in that scenario StatisticsNetherlands would publish data on next working day.
     console.log("DEBUGG currentPrice", this.currentPrice);
     console.log("DEBUGG test historical price 22 March 2023 01:00:00", this.getHistoricalPrice(1679446800)); // This should return the price for January which was released 22nd February
     console.log("DEBUGG test historical price 22 March 2023 02:00:00", this.getHistoricalPrice(1679450400)); // This should return the price for February which was released 22nd March 02:00:00
@@ -183,33 +184,14 @@ export class StatisticsNetherlandsPriceFeed extends PriceFeedInterface {
     // historicalPricePeriods are ordered from oldest to newest.
     // This finds the first index in pricePeriod whose time is after the provided time.
     const matchedIndex = this.priceHistory.findIndex((pricePeriod, index) => {
-      console.log("time:", time);
-      console.log("pricePeriod date:", time < pricePeriod.date);
-    
-      if (time === pricePeriod.date) {
-        return true;
-      } else if (time < pricePeriod.date) {
-        if (index > 0 && time >= this.priceHistory[index - 1].date) {
-          return index - 1;
-         }
-      } else if (time > pricePeriod.date) {
-        const isLastIndex = index === this.priceHistory.length - 1;
-        const nextIndex = index + 1;
-        const hasNextIndex = nextIndex < this.priceHistory.length;
-        if (isLastIndex || !hasNextIndex || time < this.priceHistory[nextIndex].date) {
-          return true;
-        }
-      }
-    
-      return false;
+      return time < pricePeriod.date;
     });
-    console.log("matched index:", matchedIndex);
 
     // Then we get the previous element to matchedIndex. Since that would be the last closing price for us.
     let match = undefined;
-    match = this.priceHistory[matchedIndex];
-    
-    console.log("match:", match);
+    if (matchedIndex > 0) {
+      match = this.priceHistory[matchedIndex - 1];
+    }
 
     // If there is no match, that means that the time was past the last data point.
     // In this case, the best match for this price is the current price.
@@ -230,8 +212,6 @@ export class StatisticsNetherlandsPriceFeed extends PriceFeedInterface {
     }
 
     returnPrice = match.price;
-    console.log("match.price:", match.price);
-    console.log("returnPrice:", returnPrice);
     if (verbose) {
       console.group(`\n(${this.symbolString}) Historical price @ ${match.date}`);
       console.log(`- ✅ Close Price:${Web3.utils.fromWei(returnPrice.toString())}`);
@@ -267,15 +247,13 @@ export class StatisticsNetherlandsPriceFeed extends PriceFeedInterface {
   private convertFormattedDateToTimestamp(formattedDate: string) {
     const year = formattedDate.slice(0, 4);
     const monthString = formattedDate.slice(6, 8);
-    const monthNumber = parseInt(monthString, 10);
-    const incrementedMonth = this.incrementMonthAsString(monthNumber);
-    const date = new Date(`${year}-${incrementedMonth}-22T02:00:00`);
+    const date = new Date(Date.UTC(Number(year), Number(monthString), 22, 2, 0, 0));
     return moment(date, "YYYY-MM-DD HH:mm:ss").unix();
   }
 
   private incrementMonthAsString(month: number): string {
     let incrementMonth: number;
-    
+
     if (month >= 1 && month <= 11) {
       // If the month is between January (1) and November (11), simply increment by 1
       incrementMonth = month + 1;
