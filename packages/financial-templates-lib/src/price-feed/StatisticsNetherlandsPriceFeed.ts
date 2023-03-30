@@ -182,24 +182,31 @@ export class StatisticsNetherlandsPriceFeed extends PriceFeedInterface {
 
     // historicalPricePeriods are ordered from oldest to newest.
     // This finds the first index in pricePeriod whose time is after the provided time.
-    const matchedIndex = this.priceHistory.findIndex((pricePeriod) => {
+    const matchedIndex = this.priceHistory.findIndex((pricePeriod, index) => {
       console.log("time:", time);
       console.log("pricePeriod date:", time < pricePeriod.date);
+    
       if (time === pricePeriod.date) {
         return true;
       } else if (time < pricePeriod.date) {
-        return time > pricePeriod.date;
-      } else {
-        return false;
+        return index > 0 && time >= this.priceHistory[index - 1].date;
+      } else if (time > pricePeriod.date) {
+        const isLastIndex = index === this.priceHistory.length - 1;
+        const nextIndex = index + 1;
+        const hasNextIndex = nextIndex < this.priceHistory.length;
+        if (isLastIndex || !hasNextIndex || time < this.priceHistory[nextIndex].date) {
+          return true;
+        }
       }
+    
+      return false;
     });
     console.log("matched index:", matchedIndex);
 
     // Then we get the previous element to matchedIndex. Since that would be the last closing price for us.
     let match = undefined;
-    if (matchedIndex > 0) {
-      match = this.priceHistory[matchedIndex - 1];
-    }
+    match = this.priceHistory[matchedIndex];
+    
     console.log("match:", match);
 
     // If there is no match, that means that the time was past the last data point.
