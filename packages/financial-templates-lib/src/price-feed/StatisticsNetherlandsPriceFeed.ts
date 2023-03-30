@@ -189,7 +189,9 @@ export class StatisticsNetherlandsPriceFeed extends PriceFeedInterface {
       if (time === pricePeriod.date) {
         return true;
       } else if (time < pricePeriod.date) {
-        return index > 0 && time >= this.priceHistory[index - 1].date;
+        if (index > 0 && time >= this.priceHistory[index - 1].date) {
+          return index - 1;
+         }
       } else if (time > pricePeriod.date) {
         const isLastIndex = index === this.priceHistory.length - 1;
         const nextIndex = index + 1;
