@@ -40,10 +40,12 @@ export class StatisticsNetherlandsPriceFeed extends PriceFeedInterface {
     this.priceHistory = [];
 
     this.convertPriceFeedDecimals = (number) => {
-      return Web3.utils.toBN(parseFixed(number.toString().substring(0, priceFeedDecimals), priceFeedDecimals).toString());
+      return Web3.utils.toBN(
+        parseFixed(number.toString().substring(0, priceFeedDecimals), priceFeedDecimals).toString()
+      );
     };
   }
-  public async update(ancillaryData?: string): Promise<void> {
+  public async update(): Promise<void> {
     const currentTime = await this.getTime();
 
     // Return early if the last call was too recent.
@@ -77,7 +79,8 @@ export class StatisticsNetherlandsPriceFeed extends PriceFeedInterface {
     // 1. Construct URL.
     // See https://cran.r-project.org/web/packages/cbsodataR/cbsodataR.pdf
     // https://opendata.cbs.nl/ODataApi/odata/83906ENG/UntypedDataSet?$filter=Periods ge '2023MM01'
-    const url = `https://opendata.cbs.nl/ODataApi/odata/83906ENG/UntypedDataSet` +
+    const url =
+      `https://opendata.cbs.nl/ODataApi/odata/83906ENG/UntypedDataSet` +
       `?$filter=Periods ge '` +
       `${formattedStartDateString}'`;
 
@@ -123,15 +126,13 @@ export class StatisticsNetherlandsPriceFeed extends PriceFeedInterface {
 
     // 4. Parse results.
     // historyResponse.value
-    const newHistoricalPricePeriods =
-      historyResponse.value
-        .map((dailyData: any) => {
-          return {
-            date: this.convertFormattedDateToTimestamp(dailyData.Periods),
-            // price: this.convertPriceFeedDecimals(dailyData.PriceIndexOfExistingOwnHomes_1.trim()),
-            price: dailyData.PriceIndexOfExistingOwnHomes_1.trim(),
-          }
-        })
+    const newHistoricalPricePeriods = historyResponse.value.map((dailyData: any) => {
+      return {
+        date: this.convertFormattedDateToTimestamp(dailyData.Periods),
+        price: this.convertPriceFeedDecimals(dailyData.PriceIndexOfExistingOwnHomes_1.trim()),
+        // price: dailyData.PriceIndexOfExistingOwnHomes_1.trim(),
+      };
+    });
 
     console.log("DEBUGG newHistoricalPricePeriods", newHistoricalPricePeriods);
     // 5. Store results.
@@ -149,7 +150,6 @@ export class StatisticsNetherlandsPriceFeed extends PriceFeedInterface {
     console.log("DEBUGG test historical price 27th March", this.getHistoricalPrice(1679855760));
     console.log("DEBUGG test historical price 28th March", this.getHistoricalPrice(1679942490));
   }
-
 
   public getCurrentPrice(): BN | null {
     return this.currentPrice;
@@ -183,7 +183,7 @@ export class StatisticsNetherlandsPriceFeed extends PriceFeedInterface {
 
     // historicalPricePeriods are ordered from oldest to newest.
     // This finds the first index in pricePeriod whose time is after the provided time.
-    const matchedIndex = this.priceHistory.findIndex((pricePeriod, index) => {
+    const matchedIndex = this.priceHistory.findIndex((pricePeriod) => {
       return time < pricePeriod.date;
     });
 
@@ -261,17 +261,17 @@ export class StatisticsNetherlandsPriceFeed extends PriceFeedInterface {
       // If the month is December (12), set the month to January (1)
       incrementMonth = 1;
     } else {
-      throw new Error('Invalid month value');
+      throw new Error("Invalid month value");
     }
 
-    const incrementMonthString = incrementMonth.toString().padStart(2, '0');
+    const incrementMonthString = incrementMonth.toString().padStart(2, "0");
     return incrementMonthString;
   }
 
   private formatDate(startDate: string) {
     const date = new Date(startDate);
     const year = date.getFullYear().toString();
-    const month = ('0' + (date.getMonth() + 1)).slice(-2); // add leading zero if month is less than 10
-    return year + 'MM' + month;
+    const month = ("0" + (date.getMonth() + 1)).slice(-2); // add leading zero if month is less than 10
+    return year + "MM" + month;
   }
 }
