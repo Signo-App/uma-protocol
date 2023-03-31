@@ -128,8 +128,8 @@ export class StatisticsNetherlandsPriceFeed extends PriceFeedInterface {
         .map((dailyData: any) => {
           return {
             date: this.convertFormattedDateToTimestamp(dailyData.Periods),
-            // price: this.convertPriceFeedDecimals(dailyData.PriceIndexOfExistingOwnHomes_1.trim()),
-            price: dailyData.PriceIndexOfExistingOwnHomes_1.trim(),
+            price: this.convertPriceFeedDecimals(dailyData.PriceIndexOfExistingOwnHomes_1.trim()),
+            // price: dailyData.PriceIndexOfExistingOwnHomes_1.trim(),
           }
         })
 
@@ -141,6 +141,7 @@ export class StatisticsNetherlandsPriceFeed extends PriceFeedInterface {
 
     // NLHPI updates on the 22nd of every month at 02:00:00
     // TODO: Account for edge case, when 22nd falls on a weekend, in that scenario StatisticsNetherlands would publish data on next working day.
+    console.log("type of current price:", typeof(this.currentPrice));
     console.log("DEBUGG currentPrice", this.currentPrice);
     console.log("DEBUGG test historical price 22 March 2023 01:00:00", this.getHistoricalPrice(1679446800)); // This should return the price for January which was released 22nd February
     console.log("DEBUGG test historical price 22 March 2023 02:00:00", this.getHistoricalPrice(1679450400)); // This should return the price for February which was released 22nd March 02:00:00
