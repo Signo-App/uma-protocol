@@ -61,13 +61,9 @@ export class StatisticsNetherlandsPriceFeed extends PriceFeedInterface {
     }
 
     const startLookbackWindow = currentTime - this.lookback;
-    console.log("DEBUGG startLookbackWindow", startLookbackWindow);
     // dataFetchStart gives an "early bound" to our data
     const dataFetchStartDateString = this._secondToDate(startLookbackWindow);
-    console.log("DEBUGG dataFetchStartDate", dataFetchStartDateString);
-    console.log("DEBUGG dataFetchStartDate type", typeof dataFetchStartDateString);
     const formattedStartDateString = this.formatDate(dataFetchStartDateString);
-    console.log("DEBUGG formattedStartDate", formattedStartDateString);
 
     this.logger.debug({
       at: "StatisticsNetherlandsApiPriceFeed",
@@ -86,7 +82,6 @@ export class StatisticsNetherlandsPriceFeed extends PriceFeedInterface {
 
     // 2. Send request.
     const historyResponse = await this.networker.getJson(url);
-    console.log("DEBUGG historyResponse", historyResponse);
 
     // Sample Response
     // {
@@ -134,7 +129,6 @@ export class StatisticsNetherlandsPriceFeed extends PriceFeedInterface {
       };
     });
 
-    console.log("DEBUGG newHistoricalPricePeriods", newHistoricalPricePeriods);
     // 5. Store results.
     this.currentPrice = newHistoricalPricePeriods[newHistoricalPricePeriods.length - 1].price;
     this.priceHistory = newHistoricalPricePeriods;
@@ -142,13 +136,6 @@ export class StatisticsNetherlandsPriceFeed extends PriceFeedInterface {
 
     // NLHPI updates on the 22nd of every month at 02:00:00
     // TODO: Account for edge case, when 22nd falls on a weekend, in that scenario StatisticsNetherlands would publish data on next working day.
-    console.log("DEBUGG currentPrice", this.currentPrice);
-    console.log("DEBUGG test historical price 22 March 2023 01:00:00", this.getHistoricalPrice(1679446800)); // This should return the price for January which was released 22nd February
-    console.log("DEBUGG test historical price 22 March 2023 02:00:00", this.getHistoricalPrice(1679450400)); // This should return the price for February which was released 22nd March 02:00:00
-    console.log("DEBUGG test historical price 22 March 2023 03:00:00", this.getHistoricalPrice(1679454000)); // This should return the price for February which was released 22nd March 02:00:00
-    console.log("DEBUGG test historical price 26th March", this.getHistoricalPrice(1679769360));
-    console.log("DEBUGG test historical price 27th March", this.getHistoricalPrice(1679855760));
-    console.log("DEBUGG test historical price 28th March", this.getHistoricalPrice(1679942490));
   }
 
   public getCurrentPrice(): BN | null {
