@@ -98,10 +98,10 @@ export function reduceEvents(state: EventState = {}, event: Event): EventState {
     }
     case "LiquidationCreated": {
       const typedEvent = event as LiquidationCreated;
-      const { sponsor, tokensOutstanding, liquidatedCollateral } = typedEvent.args;
+      const { sponsor, tokensOutstanding, lockedCollateralAfterWithdrawals } = typedEvent.args;
       const tokens = Balances(state.tokens || {});
       const collateral = Balances(state.collateral || {});
-      collateral.sub(sponsor, liquidatedCollateral.toString());
+      collateral.sub(sponsor, lockedCollateralAfterWithdrawals.toString());
       tokens.sub(sponsor, tokensOutstanding.toString());
       return {
         ...state,

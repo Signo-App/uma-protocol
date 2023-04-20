@@ -101,13 +101,13 @@ export class FinancialContractFactoryClient {
     // Look for events on chain from the previous seen block number to the current block number.
     const eventToSearchFor =
       this.contractType === "PerpetualCreator" ? "CreatedPerpetual" : "CreatedExpiringMultiParty";
-    const [currentTime, createdContractEventsObj] = await Promise.all([
-      this.financialContractFactory.methods.getCurrentTime().call(),
+    const [currentBlock, createdContractEventsObj] = await Promise.all([
+      this.web3.eth.getBlock("latest"),
       this.financialContractFactory.getPastEvents(eventToSearchFor, blockSearchConfig),
     ]);
 
     // Set the current contract time as the last update timestamp from the contract.
-    this.lastUpdateTimestamp = parseInt(currentTime);
+    this.lastUpdateTimestamp = parseInt(String(currentBlock.timestamp));
 
     // Process the responses into clean objects.
     if (this.contractType === "ExpiringMultiPartyCreator") {

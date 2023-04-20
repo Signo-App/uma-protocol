@@ -1,10 +1,10 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.0;
 
 import "../../common/interfaces/ExpandedIERC20.sol";
 import "../../common/interfaces/IERC20Standard.sol";
 import "../../oracle/implementation/ContractCreator.sol";
-import "../../common/implementation/Testable.sol";
 import "../../common/implementation/AddressWhitelist.sol";
 import "../../common/implementation/Lockable.sol";
 import "../common/TokenFactory.sol";
@@ -12,6 +12,44 @@ import "../common/SyntheticToken.sol";
 import "./ExpiringMultiPartyLib.sol";
 
 /**
+ExpandedIERC20
+IERC20Standard
+ContractCreator
+Lockable
+TokenFactory
+ExpandedERC20
+SyntheticToken
+
+Registry
+RegistryInterface
+
+Finder
+FinderInterface
+
+MultiRole
+Constants
+
+AddressWhitelist
+AddressWhitelistInterface
+
+
+ExpiringMultiPartyLib
+ExpiringMultiParty
+Liquidatable
+PricelessPositionManager
+
+FixedPoint
+
+OracleInterface
+OptimisticOracleInterface
+IdentifierWhitelistInterface
+
+StoreInterface
+AdministrateeInterface
+FinancialProductLibrary
+ */
+
+/**f
  * @title Expiring Multi Party Contract creator.
  * @notice Factory contract to create and register new instances of expiring multiparty contracts.
  * Responsible for constraining the parameters used to construct a new EMP. This creator contains a number of constraints
@@ -21,7 +59,7 @@ import "./ExpiringMultiPartyLib.sol";
  * to be the only way to create valid financial contracts that are registered with the DVM (via _registerContract),
   we can enforce deployment configurations here.
  */
-contract ExpiringMultiPartyCreator is ContractCreator, Testable, Lockable {
+contract ExpiringMultiPartyCreator is ContractCreator, Lockable {
     using FixedPoint for FixedPoint.Unsigned;
 
     /****************************************
@@ -32,6 +70,7 @@ contract ExpiringMultiPartyCreator is ContractCreator, Testable, Lockable {
         uint256 expirationTimestamp;
         address collateralAddress;
         bytes32 priceFeedIdentifier;
+        bytes ancillaryData;
         string syntheticName;
         string syntheticSymbol;
         FixedPoint.Unsigned collateralRequirement;
@@ -39,6 +78,7 @@ contract ExpiringMultiPartyCreator is ContractCreator, Testable, Lockable {
         FixedPoint.Unsigned sponsorDisputeRewardPercentage;
         FixedPoint.Unsigned disputerDisputeRewardPercentage;
         FixedPoint.Unsigned minSponsorTokens;
+        FixedPoint.Unsigned ooReward;
         uint256 withdrawalLiveness;
         uint256 liquidationLiveness;
         address financialProductLibraryAddress;
@@ -52,13 +92,8 @@ contract ExpiringMultiPartyCreator is ContractCreator, Testable, Lockable {
      * @notice Constructs the ExpiringMultiPartyCreator contract.
      * @param _finderAddress UMA protocol Finder used to discover other protocol contracts.
      * @param _tokenFactoryAddress ERC20 token factory used to deploy synthetic token instances.
-     * @param _timerAddress Contract that stores the current time in a testing environment.
      */
-    constructor(
-        address _finderAddress,
-        address _tokenFactoryAddress,
-        address _timerAddress
-    ) ContractCreator(_finderAddress) Testable(_timerAddress) nonReentrant() {
+    constructor(address _finderAddress, address _tokenFactoryAddress) ContractCreator(_finderAddress) nonReentrant() {
         tokenFactoryAddress = _tokenFactoryAddress;
     }
 
@@ -67,7 +102,7 @@ contract ExpiringMultiPartyCreator is ContractCreator, Testable, Lockable {
      * @param params is a `ConstructorParams` object from ExpiringMultiParty.
      * @return address of the deployed ExpiringMultiParty contract.
      */
-    function createExpiringMultiParty(Params memory params) public nonReentrant() returns (address) {
+    function createExpiringMultiParty(Params memory params) public nonReentrant returns (address) {
         // Create a new synthetic token using the params.
         require(bytes(params.syntheticName).length != 0, "Missing synthetic name");
         require(bytes(params.syntheticSymbol).length != 0, "Missing synthetic symbol");
@@ -84,7 +119,8 @@ contract ExpiringMultiPartyCreator is ContractCreator, Testable, Lockable {
         tokenCurrency.addBurner(derivative);
         tokenCurrency.resetOwner(derivative);
 
-        _registerContract(new address[](0), derivative);
+        // DO NOT REGISTER Financial Contract with UMA's Registry
+        // _registerContract(new address[](0), derivative);
 
         emit CreatedExpiringMultiParty(derivative, msg.sender);
 
@@ -103,8 +139,7 @@ contract ExpiringMultiPartyCreator is ContractCreator, Testable, Lockable {
     {
         // Known from creator deployment.
         constructorParams.finderAddress = finderAddress;
-        constructorParams.timerAddress = timerAddress;
-
+        constructorParams.owner = msg.sender;
         // Enforce configuration constraints.
         require(params.withdrawalLiveness != 0, "Withdrawal liveness cannot be 0");
         require(params.liquidationLiveness != 0, "Liquidation liveness cannot be 0");
@@ -124,11 +159,13 @@ contract ExpiringMultiPartyCreator is ContractCreator, Testable, Lockable {
         constructorParams.expirationTimestamp = params.expirationTimestamp;
         constructorParams.collateralAddress = params.collateralAddress;
         constructorParams.priceFeedIdentifier = params.priceFeedIdentifier;
+        constructorParams.ancillaryData = params.ancillaryData;
         constructorParams.collateralRequirement = params.collateralRequirement;
         constructorParams.disputeBondPercentage = params.disputeBondPercentage;
         constructorParams.sponsorDisputeRewardPercentage = params.sponsorDisputeRewardPercentage;
         constructorParams.disputerDisputeRewardPercentage = params.disputerDisputeRewardPercentage;
         constructorParams.minSponsorTokens = params.minSponsorTokens;
+        constructorParams.ooReward = params.ooReward;
         constructorParams.withdrawalLiveness = params.withdrawalLiveness;
         constructorParams.liquidationLiveness = params.liquidationLiveness;
         constructorParams.financialProductLibraryAddress = params.financialProductLibraryAddress;
