@@ -26,7 +26,7 @@ const {
 } = require("@uma/financial-templates-lib");
 
 // Contract ABIs and network Addresses.
-const { findContractVersion } = require("@uma/core");
+// const { findContractVersion } = require("@uma/core");
 const { getAddress, getAbi } = require("@uma/contracts-node");
 
 /**
@@ -87,9 +87,9 @@ async function run({
       return {
         // Goerli - Sumero Forked EMP Contract
         contractType: "ExpiringMultiParty",
-        contractVersion: "2.0.1",
-      }
-    }
+        contractVersion: "2.0.2",
+      };
+    };
 
     // Load unlocked web3 accounts and get the networkId.
     const [detectedContract, accounts, networkId] = await Promise.all([
@@ -124,10 +124,8 @@ async function run({
     const { getAbi: getVersionedAbi } = require(getContractsNodePackageAliasForVerion(
       liquidatorConfig.contractVersion
     ));
-    const financialContract = new web3.eth.Contract(
-      getVersionedAbi(liquidatorConfig.contractType),
-      financialContractAddress
-    );
+    const abi = getVersionedAbi(liquidatorConfig.contractType);
+    const financialContract = new web3.eth.Contract(abi, financialContractAddress);
 
     // Returns whether the Financial Contract has expired yet
     const checkIsExpiredOrShutdownPromise = async () => {
@@ -135,7 +133,7 @@ async function run({
         liquidatorConfig.contractType === "ExpiringMultiParty"
           ? financialContract.methods.expirationTimestamp().call()
           : financialContract.methods.emergencyShutdownTimestamp().call(),
-        financialContract.methods.getCurrentTime().call(),
+        web3.eth.getBlock("latest").then((block) => block.timestamp),
       ]);
       // Check if Financial Contract is expired.
       if (
@@ -144,8 +142,9 @@ async function run({
       ) {
         logger.info({
           at: "Liquidator#index",
-          message: `Financial Contract is ${liquidatorConfig.contractType === "ExpiringMultiParty" ? "expired" : "shutdown"
-            }, can only withdraw liquidator dispute rewards 🕰`,
+          message: `Financial Contract is ${
+            liquidatorConfig.contractType === "ExpiringMultiParty" ? "expired" : "shutdown"
+          }, can only withdraw liquidator dispute rewards 🕰`,
           expirationOrShutdownTimestamp,
           contractTimestamp,
         });
@@ -304,7 +303,7 @@ async function run({
     }
 
     // Create a execution loop that will run indefinitely (or yield early if in serverless mode)
-    for (; ;) {
+    for (;;) {
       // Check if Financial Contract expired before running current iteration.
       let isExpiredOrShutdown = await checkIsExpiredOrShutdownPromise();
 
@@ -440,7 +439,7 @@ function nodeCallback(err) {
 // If called directly by node, execute the Poll Function. This lets the script be run as a node process.
 if (require.main === module) {
   Poll(nodeCallback)
-    .then(() => { })
+    .then(() => {})
     .catch(nodeCallback);
 }
 
