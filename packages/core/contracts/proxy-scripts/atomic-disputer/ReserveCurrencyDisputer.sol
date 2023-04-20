@@ -50,13 +50,10 @@ contract ReserveCurrencyDisputer {
 
         // 3. Compute the disputeBondAmount. Multiply by the unit collateral so the dispute bond is a percentage of the
         // locked collateral after fees. To add fees we simply multiply the rawUnitCollateral by the cumulativeFeeMultiplier.
-        FixedPoint.Unsigned memory disputeBondAmount =
-            liquidationData.lockedCollateral.mul(disputeBondPercentage).mul(
-                (liquidationData.rawUnitCollateral).mul(fc.cumulativeFeeMultiplier())
-            );
+        FixedPoint.Unsigned memory disputeBondAmount = liquidationData.lockedCollateral.mul(disputeBondPercentage);
 
         // 4. Calculate required collateral. Cost of a dispute is the dispute bond + the final fee.
-        FixedPoint.Unsigned memory totalCollateralRequired = disputeBondAmount.add(liquidationData.finalFee);
+        FixedPoint.Unsigned memory totalCollateralRequired = disputeBondAmount.add(fc.ooReward().rawValue);
 
         // 5. Compute the collateral shortfall. This considers and collateral that is current in the contract.
         FixedPoint.Unsigned memory collateralToBePurchased =
@@ -104,18 +101,23 @@ interface IFinancialContract {
     enum Status { Uninitialized, NotDisputed, Disputed, DisputeSucceeded, DisputeFailed }
 
     struct LiquidationData {
-        address sponsor;
-        address liquidator;
-        Status state;
-        uint256 liquidationTime;
-        FixedPoint.Unsigned tokensOutstanding;
-        FixedPoint.Unsigned lockedCollateral;
-        FixedPoint.Unsigned liquidatedCollateral;
-        FixedPoint.Unsigned rawUnitCollateral;
-        address disputer;
+        address sponsor; // Address of the liquidated position's sponsor
+        address liquidator; // Address who created this liquidation
+        Status state; // Liquidated (and expired or not), Pending a Dispute, or Dispute has resolved
+        uint256 liquidationTime; // Time when liquidation is initiated, needed to get price from Oracle
+        // Following variables determined by the position that is being liquidated:
+        FixedPoint.Unsigned tokensOutstanding; // Synthetic tokens required to be burned by liquidator to initiate dispute
+        FixedPoint.Unsigned lockedCollateral; // Collateral locked by contract and released upon expiry or post-dispute
+        // Amount of collateral locked in the liquidation if all pending slow withdrawals went through.
+        // This value is used during disputes instead of lockedCollateral, so insolvent withdrawals can be punished.
+        FixedPoint.Unsigned lockedCollateralAfterWithdrawals;
+        // Following variables set upon initiation of a dispute:
+        address disputer; // Person who is disputing a liquidation
+        // Following variable set upon a resolution of a dispute:
         FixedPoint.Unsigned settlementPrice;
-        FixedPoint.Unsigned finalFee;
     }
+
+    function ooReward() external view returns (FixedPoint.Unsigned memory);
 
     function liquidations(address sponsor, uint256 liquidationId) external view returns (LiquidationData memory);
 

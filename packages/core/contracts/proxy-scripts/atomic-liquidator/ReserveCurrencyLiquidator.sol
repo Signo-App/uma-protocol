@@ -180,13 +180,7 @@ interface IFinancialContract {
         FixedPoint.Unsigned calldata maxCollateralPerToken,
         FixedPoint.Unsigned calldata maxTokensToLiquidate,
         uint256 deadline
-    )
-        external
-        returns (
-            uint256 liquidationId,
-            FixedPoint.Unsigned memory tokensLiquidated,
-            FixedPoint.Unsigned memory finalFeeBond
-        );
+    ) external returns (uint256 liquidationId, FixedPoint.Unsigned memory tokensLiquidated);
 }
 
 interface IStore {

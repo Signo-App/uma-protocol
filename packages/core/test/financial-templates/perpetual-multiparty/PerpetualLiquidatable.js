@@ -397,18 +397,6 @@ describe("PerpetualLiquidatable", function () {
         .setFinalFee(collateralToken.options.address, { rawValue: finalFeeAmount.toString() })
         .send({ from: accounts[0] });
 
-      const { finalFeeBond } = await liquidationContract.methods
-        .createLiquidation(
-          sponsor,
-          { rawValue: "0" },
-          { rawValue: pricePerToken.toString() },
-          { rawValue: amountOfSynthetic.toString() },
-          unreachableDeadline
-        )
-        .call({ from: liquidator });
-      // Should return the correct final fee amount.
-      assert.equal(finalFeeBond.toString(), finalFeeAmount.toString());
-
       const intitialBalance = toBN(await collateralToken.methods.balanceOf(liquidator).call());
       await liquidationContract.methods
         .createLiquidation(
