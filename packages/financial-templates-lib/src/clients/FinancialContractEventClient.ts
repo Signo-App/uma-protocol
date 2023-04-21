@@ -231,7 +231,7 @@ export class FinancialContractEventClient {
       SettleExpiredEvent[] | SettleEmergencyShutdownEvent[]
     ];
     // Set the current contract time as the last update timestamp from the contract.
-    this.lastUpdateTimestamp = parseInt(currentBlock.timestamp);
+    this.lastUpdateTimestamp = Number(currentBlock.timestamp);
 
     // Process the responses into clean objects.
     // Liquidation events.

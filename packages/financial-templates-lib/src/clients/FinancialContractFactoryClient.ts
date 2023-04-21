@@ -107,7 +107,7 @@ export class FinancialContractFactoryClient {
     ]);
 
     // Set the current contract time as the last update timestamp from the contract.
-    this.lastUpdateTimestamp = parseInt(String(currentBlock.timestamp));
+    this.lastUpdateTimestamp = Number(currentBlock.timestamp);
 
     // Process the responses into clean objects.
     if (this.contractType === "ExpiringMultiPartyCreator") {

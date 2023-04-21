@@ -200,7 +200,7 @@ export class FinancialContractClient {
       this.financialContract.getPastEvents("NewSponsor", { fromBlock }),
       this.financialContract.getPastEvents("EndedSponsorPosition", { fromBlock }),
       this.financialContract.getPastEvents("LiquidationCreated", { fromBlock }),
-      this.web3.eth.getBlock("latest").then((currentBlock) => parseInt(String(currentBlock.timestamp))),
+      this.web3.eth.getBlock("latest").then((currentBlock) => Number(currentBlock.timestamp)),
     ]);
 
     if (this.contractType === "Perpetual") {
