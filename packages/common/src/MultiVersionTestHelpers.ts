@@ -8,9 +8,7 @@ const { toWei, utf8ToHex, padRight } = Web3.utils;
 // Versions that production bots support.
 export const SUPPORTED_CONTRACT_VERSIONS = [
   { contractType: "ExpiringMultiParty", contractVersion: "2.0.1" },
-  { contractType: "ExpiringMultiParty", contractVersion: "2.0.2" },
   { contractType: "Perpetual", contractVersion: "2.0.1" },
-  { contractType: "Perpetual", contractVersion: "2.0.2" },
 ];
 
 // Versions that unit tests will test against. Note we dont test anything less than 2.0.1 as all older contracts have
@@ -18,13 +16,10 @@ export const SUPPORTED_CONTRACT_VERSIONS = [
 export const TESTED_CONTRACT_VERSIONS = [
   { contractType: "ExpiringMultiParty", contractVersion: "2.0.1" },
   { contractType: "Perpetual", contractVersion: "2.0.1" },
-  { contractType: "ExpiringMultiParty", contractVersion: "2.0.2" },
-  { contractType: "Perpetual", contractVersion: "2.0.2" },
 ];
 
 export const CORE_CONTRACTS_NODE_VERSION_MAPPING = {
   "2.0.1": "0.1.0",
-  "2.0.2": "",
 };
 
 // Assumes that the contracts-node package alias is @uma/contracts-node-X-Y-Z.
@@ -35,17 +30,7 @@ export function getContractsNodePackageAliasForVerion(version: string): string {
   const isKey = (input: string): input is keyof typeof CORE_CONTRACTS_NODE_VERSION_MAPPING =>
     input in CORE_CONTRACTS_NODE_VERSION_MAPPING;
   if (!isKey(version)) throw new Error("Unknown version!");
-  return removeTrailingHyphen(
-    `@uma/contracts-node-${CORE_CONTRACTS_NODE_VERSION_MAPPING[version].split(".").join("-")}`
-  );
-}
-
-function removeTrailingHyphen(str: string) {
-  if (str.endsWith("-")) {
-    return str.slice(0, -1); // remove the last character (hyphen)
-  } else {
-    return str; // return the original string unchanged
-  }
+  return `@uma/contracts-node`;
 }
 
 interface Version {

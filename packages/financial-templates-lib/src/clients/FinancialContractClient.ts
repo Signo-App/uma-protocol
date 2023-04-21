@@ -32,12 +32,12 @@ interface Liquidation {
   disputer: string;
 }
 
-// type FinancialContract = ExpiringMultiPartyWeb3 | PerpetualWeb3;
+type FinancialContract = ExpiringMultiPartyWeb3 | PerpetualWeb3;
 
-// type ContractLiquidationStruct = Omit<
-//   Awaited<ReturnType<ReturnType<FinancialContract["methods"]["liquidations"]>["call"]>>,
-//   number
-// >;
+type ContractLiquidationStruct = Omit<
+  Awaited<ReturnType<ReturnType<FinancialContract["methods"]["liquidations"]>["call"]>>,
+  number
+>;
 
 type ConvertDecimals = ReturnType<typeof ConvertDecimals>;
 
@@ -273,7 +273,8 @@ export class FinancialContractClient {
       ),
       BluebirdPromise.map(
         liquidatedSponsors,
-        async (address) => (this.financialContract.methods.getLiquidations(address).call() as unknown) as any[],
+        async (address) =>
+          (this.financialContract.methods.getLiquidations(address).call() as unknown) as ContractLiquidationStruct[],
         {
           concurrency: WEB3_CALLS_BATCH_SIZE,
         }

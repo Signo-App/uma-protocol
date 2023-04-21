@@ -87,7 +87,7 @@ async function run({
       return {
         // Goerli - Sumero Forked EMP Contract
         contractType: "ExpiringMultiParty",
-        contractVersion: "2.0.2",
+        contractVersion: "2.0.1",
       };
     };
 
