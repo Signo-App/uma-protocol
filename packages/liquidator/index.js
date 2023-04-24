@@ -69,6 +69,7 @@ async function run({
     logger[pollingDelay === 0 ? "debug" : "info"]({
       at: "Liquidator#index",
       message: "Liquidator started 🌊",
+      wallet: web3.eth.currentProvider.addresses[0],
       financialContractAddress,
       pollingDelay,
       errorRetries,
@@ -81,13 +82,13 @@ async function run({
       proxyTransactionWrapperConfig,
     });
 
-    await web3.eth.net.getId();
+    // await web3.eth.net.getId();
 
     const spoofContractVersion = async () => {
       return {
         // Goerli - Sumero Forked EMP Contract
         contractType: "ExpiringMultiParty",
-        contractVersion: "2.0.1",
+        contractVersion: "sumero-forked",
       };
     };
 

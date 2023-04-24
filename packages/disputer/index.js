@@ -26,7 +26,7 @@ const {
 } = require("@uma/financial-templates-lib");
 
 // Contract ABIs and network Addresses.
-const { findContractVersion } = require("@uma/core");
+// const { findContractVersion } = require("@uma/core");
 const { getAddress, getAbi } = require("@uma/contracts-node");
 
 /**
@@ -64,6 +64,7 @@ async function run({
     logger[pollingDelay === 0 ? "debug" : "info"]({
       at: "Disputer#index",
       message: "Disputer started🔎",
+      wallet: web3.eth.currentProvider.addresses[0],
       financialContractAddress,
       pollingDelay,
       errorRetries,
@@ -74,15 +75,15 @@ async function run({
       proxyTransactionWrapperConfig,
     });
 
-    await web3.eth.net.getId();
+    // await web3.eth.net.getId();
 
     const spoofContractVersion = async () => {
       return {
         // Goerli - Sumero Forked EMP Contract
         contractType: "ExpiringMultiParty",
-        contractVersion: "2.0.1",
-      }
-    }
+        contractVersion: "sumero-forked",
+      };
+    };
 
     // Load unlocked web3 accounts and get the networkId.
     const [detectedContract, accounts, networkId] = await Promise.all([
@@ -231,7 +232,7 @@ async function run({
         });
     }
     // Create a execution loop that will run indefinitely (or yield early if in serverless mode)
-    for (; ;) {
+    for (;;) {
       await retry(
         async () => {
           await disputer.update();
@@ -342,7 +343,7 @@ function nodeCallback(err) {
 // If called directly by node, execute the Poll Function. This lets the script be run as a node process.
 if (require.main === module) {
   Poll(nodeCallback)
-    .then(() => { })
+    .then(() => {})
     .catch(nodeCallback);
 }
 
