@@ -23,12 +23,16 @@ interface GasEstimatorMapping {
 }
 
 interface EtherchainResponse {
-  safeLow: number;
-  standard: number;
-  fast: number;
-  fastest: number;
-  currentBaseFee: number;
-  recommendedBaseFee: number;
+  status: string;
+  message: string;
+  result: {
+    LastBlock: number;
+    SafeGasPrice: number;
+    ProposeGasPrice: number;
+    FastGasPrice: number;
+    suggestBaseFee: number;
+    gasUsedRatio: string;
+  };
 }
 
 interface MaticResponse {
@@ -48,7 +52,7 @@ export const MAPPING_BY_NETWORK: GasEstimatorMapping = {
   //     defaultFastPricesGwei: <default-gas-price-for-network>
   // }
   1: {
-    url: "https://www.etherchain.org/api/gasPriceOracle",
+    url: "https://api.etherscan.io/api?module=gastracker&action=gasoracle",
     defaultMaxFeePerGasGwei: 500,
     defaultMaxPriorityFeePerGasGwei: 5,
     type: NetworkType.London,
@@ -256,12 +260,12 @@ export class GasEstimator {
   }
 
   private _extractFastGasPrice(json: { [key: string]: any }, url: string): LondonGasData | LegacyGasData {
-    if (url.includes("etherchain.org")) {
+    if (url.includes("etherscan.io")) {
       const etherchainResponse = json as EtherchainResponse;
-      if (etherchainResponse.recommendedBaseFee === undefined) throw new Error(`Bad etherchain response ${json}`);
+      if (etherchainResponse.result.suggestBaseFee === undefined) throw new Error(`Bad etherchain response ${json}`);
       return {
-        maxFeePerGas: etherchainResponse.recommendedBaseFee,
-        maxPriorityFeePerGas: etherchainResponse.fastest,
+        maxFeePerGas: etherchainResponse.result.suggestBaseFee,
+        maxPriorityFeePerGas: etherchainResponse.result.FastGasPrice,
       } as LondonGasData;
     } else if (url.includes("matic")) {
       const maticResponse = json as MaticResponse;
