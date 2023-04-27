@@ -32,10 +32,15 @@ interface Liquidation {
   disputer: string;
 }
 
-type FinancialContract = ExpiringMultiPartyWeb3 | PerpetualWeb3;
+// type FinancialContract = ExpiringMultiPartyWeb3 | PerpetualWeb3;
 
 type ContractLiquidationStruct = Omit<
-  Awaited<ReturnType<ReturnType<FinancialContract["methods"]["liquidations"]>["call"]>>,
+  Awaited<ReturnType<ReturnType<ExpiringMultiPartyWeb3["methods"]["liquidations"]>["call"]>>,
+  number
+>;
+
+type ContractPositionStruct = Omit<
+  Awaited<ReturnType<ReturnType<ExpiringMultiPartyWeb3["methods"]["positions"]>["call"]>>,
   number
 >;
 
@@ -263,10 +268,14 @@ export class FinancialContractClient {
     // Fetch sponsor position & liquidation in parallel batches, 150 at a time, to be safe and not overload the web3
     // node.
     const WEB3_CALLS_BATCH_SIZE = 150;
-    const [activePositions, allLiquidations]: [Array<any>, Array<Array<any>>] = await BluebirdPromise.all([
+    const [activePositions, allLiquidations]: [
+      Array<ContractPositionStruct>,
+      Array<Array<ContractLiquidationStruct>>
+    ] = await BluebirdPromise.all([
       BluebirdPromise.map(
         this.activeSponsors,
-        async (address) => this.financialContract.methods.positions(address).call(),
+        async (address) =>
+          (this.financialContract.methods.positions(address).call() as unknown) as ContractPositionStruct,
         {
           concurrency: WEB3_CALLS_BATCH_SIZE,
         }
@@ -308,9 +317,9 @@ export class FinancialContractClient {
         };
 
         // Get all undisputed liquidations.
-        if (this._isLiquidationPreDispute(liquidation)) {
+        if (this._isLiquidationPreDispute({ state: liquidation.state })) {
           // Determine whether liquidation has expired.
-          if (!this._isExpired(liquidation, currentTime)) {
+          if (!this._isExpired({ liquidationTime: liquidation.liquidationTime }, currentTime)) {
             undisputedLiquidations.push(liquidationData);
           } else {
             expiredLiquidations.push(liquidationData);
