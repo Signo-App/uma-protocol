@@ -119,7 +119,7 @@ function addMnemonicToProvider(
 ): HDWalletProvider {
   const wallet = new HDWalletProvider(mnemonic, provider, keyOffset, numKeys);
   // Sumero-fix: modifying the default polling delay of hdwallet to avoid unnecessary eth calls
-  if (process.env.POLLING_DELAY) {
+  if (Number(process.env.POLLING_DELAY)) {
     wallet.engine._blockTracker._pollingInterval = Number(process.env.POLLING_DELAY) * 1000;
   }
   return wallet;
