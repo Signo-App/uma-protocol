@@ -2,7 +2,7 @@
 // positions, undisputed Liquidations, expired liquidations, disputed liquidations.
 
 import { ConvertDecimals, LiquidationStatesEnum, getFromBlock } from "@uma/common";
-import { Abi, Awaited, BN, FinancialContractType, isDefined } from "../types";
+import { Abi, BN, FinancialContractType, isDefined } from "../types";
 import type { ExpiringMultiPartyWeb3, PerpetualWeb3 } from "@uma/contracts-node";
 import Web3 from "web3";
 import { aggregateTransactionsAndCall } from "../helpers/multicall";
@@ -16,7 +16,7 @@ interface Position {
   withdrawalRequestAmount: string;
   adjustedTokens: string;
   numTokens: string;
-  amountCollateral: string;
+  collateral: string;
   hasPendingWithdrawal: boolean;
 }
 
@@ -25,17 +25,22 @@ interface Liquidation {
   id: string;
   state: string;
   numTokens: string;
-  liquidatedCollateral: string;
+  lockedCollateralAfterWithdrawals: string;
   lockedCollateral: string;
   liquidationTime: string;
   liquidator: string;
   disputer: string;
 }
 
-type FinancialContract = ExpiringMultiPartyWeb3 | PerpetualWeb3;
+// type FinancialContract = ExpiringMultiPartyWeb3 | PerpetualWeb3;
 
 type ContractLiquidationStruct = Omit<
-  Awaited<ReturnType<ReturnType<FinancialContract["methods"]["liquidations"]>["call"]>>,
+  Awaited<ReturnType<ReturnType<ExpiringMultiPartyWeb3["methods"]["liquidations"]>["call"]>>,
+  number
+>;
+
+type ContractPositionStruct = Omit<
+  Awaited<ReturnType<ReturnType<ExpiringMultiPartyWeb3["methods"]["positions"]>["call"]>>,
   number
 >;
 
@@ -132,7 +137,7 @@ export class FinancialContractClient {
   // due to too little collateral or a withdrawal that, if passed, would make the position undercollateralized.
   public getUnderCollateralizedPositions(tokenRedemptionValue: string): Position[] {
     return this.positions.filter((position) => {
-      const collateralNetWithdrawal = this.toBN(position.amountCollateral)
+      const collateralNetWithdrawal = this.toBN(position.collateral)
         .sub(this.toBN(position.withdrawalRequestAmount))
         .toString();
       return this._isUnderCollateralized(position.adjustedTokens, collateralNetWithdrawal, tokenRedemptionValue);
@@ -158,7 +163,11 @@ export class FinancialContractClient {
   // Whether the given undisputed `liquidation` (`getUndisputedLiquidations` returns an array of `liquidation`s) is
   // disputable. `tokenRedemptionValue` should be the redemption value at `liquidation.time`.
   public isDisputable(liquidation: Liquidation, tokenRedemptionValue: string): boolean {
-    return !this._isUnderCollateralized(liquidation.numTokens, liquidation.liquidatedCollateral, tokenRedemptionValue);
+    return !this._isUnderCollateralized(
+      liquidation.numTokens,
+      liquidation.lockedCollateralAfterWithdrawals,
+      tokenRedemptionValue
+    );
   }
 
   // Returns an array of sponsor addresses.
@@ -196,7 +205,7 @@ export class FinancialContractClient {
       this.financialContract.getPastEvents("NewSponsor", { fromBlock }),
       this.financialContract.getPastEvents("EndedSponsorPosition", { fromBlock }),
       this.financialContract.getPastEvents("LiquidationCreated", { fromBlock }),
-      this.financialContract.methods.getCurrentTime().call().then(parseInt),
+      this.web3.eth.getBlock("latest").then((currentBlock) => Number(currentBlock.timestamp)),
     ]);
 
     if (this.contractType === "Perpetual") {
@@ -259,13 +268,21 @@ export class FinancialContractClient {
     // Fetch sponsor position & liquidation in parallel batches, 150 at a time, to be safe and not overload the web3
     // node.
     const WEB3_CALLS_BATCH_SIZE = 150;
-    const [activePositions, allLiquidations] = await BluebirdPromise.all([
-      BluebirdPromise.map(this.activeSponsors, (address) => this.financialContract.methods.positions(address).call(), {
-        concurrency: WEB3_CALLS_BATCH_SIZE,
-      }),
+    const [activePositions, allLiquidations]: [
+      Array<ContractPositionStruct>,
+      Array<Array<ContractLiquidationStruct>>
+    ] = await BluebirdPromise.all([
+      BluebirdPromise.map(
+        this.activeSponsors,
+        async (address) =>
+          (this.financialContract.methods.positions(address).call() as unknown) as ContractPositionStruct,
+        {
+          concurrency: WEB3_CALLS_BATCH_SIZE,
+        }
+      ),
       BluebirdPromise.map(
         liquidatedSponsors,
-        (address) =>
+        async (address) =>
           (this.financialContract.methods.getLiquidations(address).call() as unknown) as ContractLiquidationStruct[],
         {
           concurrency: WEB3_CALLS_BATCH_SIZE,
@@ -286,23 +303,23 @@ export class FinancialContractClient {
 
         // Construct Liquidation data to save
         const liquidationData = {
-          sponsor: liquidation.sponsor,
+          sponsor: String(liquidation.sponsor),
           id: id.toString(),
-          state: liquidation.state,
+          state: String(liquidation.state),
           // Note: The `tokensOutstanding` entry in the Perpetual's on-chain Liquidation struct is adjusted
           // for the funding rate multiplier at the time of liquidation.
-          numTokens: liquidation.tokensOutstanding.toString(),
-          liquidatedCollateral: liquidation.liquidatedCollateral.toString(),
-          lockedCollateral: liquidation.lockedCollateral.toString(),
-          liquidationTime: liquidation.liquidationTime,
-          liquidator: liquidation.liquidator,
-          disputer: liquidation.disputer,
+          numTokens: String(liquidation.tokensOutstanding.toString()),
+          lockedCollateralAfterWithdrawals: String(liquidation.lockedCollateralAfterWithdrawals.toString()),
+          lockedCollateral: String(liquidation.lockedCollateral.toString()),
+          liquidationTime: String(liquidation.liquidationTime),
+          liquidator: String(liquidation.liquidator),
+          disputer: String(liquidation.disputer),
         };
 
         // Get all undisputed liquidations.
-        if (this._isLiquidationPreDispute(liquidation)) {
+        if (this._isLiquidationPreDispute({ state: liquidation.state })) {
           // Determine whether liquidation has expired.
-          if (!this._isExpired(liquidation, currentTime)) {
+          if (!this._isExpired({ liquidationTime: liquidation.liquidationTime }, currentTime)) {
             undisputedLiquidations.push(liquidationData);
           } else {
             expiredLiquidations.push(liquidationData);
@@ -317,8 +334,7 @@ export class FinancialContractClient {
     this.disputedLiquidations = disputedLiquidations;
 
     this.positions = activePositions.map((position, index) => {
-      if (!isDefined(this.latestCumulativeFundingRateMultiplier))
-        throw new Error("initialSetup hasn't been called");
+      if (!isDefined(this.latestCumulativeFundingRateMultiplier)) throw new Error("initialSetup hasn't been called");
 
       return {
         sponsor: this.activeSponsors[index],
@@ -335,7 +351,7 @@ export class FinancialContractClient {
         numTokens: position.tokensOutstanding.toString(), // This represents the actual amount of tokens outstanding
         // for a sponsor and is the maximum amount of tokens needed to fully liquidate a position. The liquidator bot
         // therefore can liquidate up to this amount of tokens.
-        amountCollateral: this.toBN(position.rawCollateral.toString()).toString(),
+        collateral: this.toBN(position.collateral.toString()).toString(),
         // Applies the current outstanding fees to collateral.
         hasPendingWithdrawal: parseInt(position.withdrawalRequestPassTimestamp) > 0,
       };

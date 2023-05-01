@@ -16,8 +16,8 @@ type DepositEvent = ExpiringMultiPartyWeb3Events.Deposit | PerpetualWeb3Events.D
 type CreateEvent = ExpiringMultiPartyWeb3Events.PositionCreated | PerpetualWeb3Events.PositionCreated;
 type WithdrawEvent = ExpiringMultiPartyWeb3Events.Withdrawal | PerpetualWeb3Events.Withdrawal;
 type RedeemEvent = ExpiringMultiPartyWeb3Events.Redeem | PerpetualWeb3Events.Redeem;
-type RegularFeeEvent = ExpiringMultiPartyWeb3Events.RegularFeesPaid | PerpetualWeb3Events.RegularFeesPaid;
-type FinalFeeEvent = ExpiringMultiPartyWeb3Events.FinalFeesPaid | PerpetualWeb3Events.FinalFeesPaid;
+// type RegularFeeEvent = ExpiringMultiPartyWeb3Events.RegularFeesPaid | PerpetualWeb3Events.RegularFeesPaid;
+// type FinalFeeEvent = ExpiringMultiPartyWeb3Events.FinalFeesPaid | PerpetualWeb3Events.FinalFeesPaid;
 type LiquidationWithadrawnEvent =
   | ExpiringMultiPartyWeb3Events.LiquidationWithdrawn
   | PerpetualWeb3Events.LiquidationWithdrawn;
@@ -51,8 +51,8 @@ export class FinancialContractEventClient {
   private createEvents: EventExport<CreateEvent>[] = [];
   private withdrawEvents: EventExport<WithdrawEvent>[] = [];
   private redeemEvents: EventExport<RedeemEvent>[] = [];
-  private regularFeeEvents: EventExport<RegularFeeEvent>[] = [];
-  private finalFeeEvents: EventExport<FinalFeeEvent>[] = [];
+  // private regularFeeEvents: EventExport<RegularFeeEvent>[] = [];
+  // private finalFeeEvents: EventExport<FinalFeeEvent>[] = [];
   private liquidationWithdrawnEvents: (EventExport<LiquidationWithadrawnEvent> & { withdrawalAmount: string })[] = [];
   private settleExpiredPositionEvents: EventExport<SettleExpiredEvent | SettleEmergencyShutdownEvent>[] = [];
   private fundingRateUpdatedEvents: EventExport<FundingRateUpdatedEvent>[] = [];
@@ -108,8 +108,8 @@ export class FinancialContractEventClient {
     this.createEvents = [];
     this.withdrawEvents = [];
     this.redeemEvents = [];
-    this.regularFeeEvents = [];
-    this.finalFeeEvents = [];
+    // this.regularFeeEvents = [];
+    // this.finalFeeEvents = [];
     this.liquidationWithdrawnEvents = [];
     this.settleExpiredPositionEvents = [];
     this.fundingRateUpdatedEvents = [];
@@ -148,12 +148,12 @@ export class FinancialContractEventClient {
     return this.redeemEvents;
   }
 
-  public getAllRegularFeeEvents(): EventExport<RegularFeeEvent>[] {
-    return this.regularFeeEvents;
+  public getAllRegularFeeEvents(): EventExport<any>[] {
+    return [];
   }
 
-  public getAllFinalFeeEvents(): EventExport<FinalFeeEvent>[] {
-    return this.finalFeeEvents;
+  public getAllFinalFeeEvents(): EventExport<any>[] {
+    return [];
   }
 
   public getAllLiquidationWithdrawnEvents(): (EventExport<LiquidationWithadrawnEvent> & {
@@ -190,7 +190,7 @@ export class FinancialContractEventClient {
 
     // Look for events on chain from the previous seen block number to the current block number.
     const [
-      currentTime,
+      currentBlock,
       liquidationEventsObj,
       disputeEventsObj,
       disputeSettlementEventsObj,
@@ -199,12 +199,10 @@ export class FinancialContractEventClient {
       depositEventsObj,
       withdrawEventsObj,
       redeemEventsObj,
-      regularFeeEventsObj,
-      finalFeeEventsObj,
       liquidationWithdrawnEventsObj,
       settleExpiredPositionEventsObj,
     ] = (await Promise.all([
-      this.financialContract.methods.getCurrentTime().call(),
+      this.web3.eth.getBlock("latest"),
       this.financialContract.getPastEvents("LiquidationCreated", blockSearchConfig),
       this.financialContract.getPastEvents("LiquidationDisputed", blockSearchConfig),
       this.financialContract.getPastEvents("DisputeSettled", blockSearchConfig),
@@ -213,14 +211,14 @@ export class FinancialContractEventClient {
       this.financialContract.getPastEvents("Deposit", blockSearchConfig),
       this.financialContract.getPastEvents("Withdrawal", blockSearchConfig),
       this.financialContract.getPastEvents("Redeem", blockSearchConfig),
-      this.financialContract.getPastEvents("RegularFeesPaid", blockSearchConfig),
-      this.financialContract.getPastEvents("FinalFeesPaid", blockSearchConfig),
+      // this.financialContract.getPastEvents("RegularFeesPaid", blockSearchConfig),
+      // this.financialContract.getPastEvents("FinalFeesPaid", blockSearchConfig),
       this.financialContract.getPastEvents("LiquidationWithdrawn", blockSearchConfig),
       this.contractType == "ExpiringMultiParty" // If the contract is an EMP then find the SettleExpiredPosition events.
         ? this.financialContract.getPastEvents("SettleExpiredPosition", blockSearchConfig)
         : this.financialContract.getPastEvents("SettleEmergencyShutdown", blockSearchConfig), // Else, find the SettleEmergencyShutdown events.
     ] as any[])) as [
-      string,
+      any,
       LiquidationCreatedEvent[],
       DisputeEvent[],
       DisputeSettlementEvent[],
@@ -229,13 +227,11 @@ export class FinancialContractEventClient {
       DepositEvent[],
       WithdrawEvent[],
       RedeemEvent[],
-      RegularFeeEvent[],
-      FinalFeeEvent[],
       LiquidationWithadrawnEvent[],
       SettleExpiredEvent[] | SettleEmergencyShutdownEvent[]
     ];
     // Set the current contract time as the last update timestamp from the contract.
-    this.lastUpdateTimestamp = parseInt(currentTime);
+    this.lastUpdateTimestamp = Number(currentBlock.timestamp);
 
     // Process the responses into clean objects.
     // Liquidation events.
@@ -318,22 +314,22 @@ export class FinancialContractEventClient {
     }
 
     // Regular fee events.
-    for (const event of regularFeeEventsObj) {
-      this.regularFeeEvents.push({
-        transactionHash: event.transactionHash,
-        blockNumber: event.blockNumber,
-        ...event.returnValues,
-      });
-    }
+    // for (const event of regularFeeEventsObj) {
+    //   this.regularFeeEvents.push({
+    //     transactionHash: event.transactionHash,
+    //     blockNumber: event.blockNumber,
+    //     ...event.returnValues,
+    //   });
+    // }
 
-    // Final fee events.
-    for (const event of finalFeeEventsObj) {
-      this.finalFeeEvents.push({
-        transactionHash: event.transactionHash,
-        blockNumber: event.blockNumber,
-        ...event.returnValues,
-      });
-    }
+    // // Final fee events.
+    // for (const event of finalFeeEventsObj) {
+    //   this.finalFeeEvents.push({
+    //     transactionHash: event.transactionHash,
+    //     blockNumber: event.blockNumber,
+    //     ...event.returnValues,
+    //   });
+    // }
 
     // Liquidation withdrawn events.
     for (const event of liquidationWithdrawnEventsObj) {

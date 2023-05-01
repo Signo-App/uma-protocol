@@ -99,7 +99,7 @@ class Disputer {
       contractVersion: {
         value: undefined,
         isValid: (x) => {
-          return x === "2.0.1";
+          return x === "2.0.1" || x === "sumero-forked";
         },
       },
     };

@@ -9,6 +9,8 @@ const { toWei, utf8ToHex, padRight } = Web3.utils;
 export const SUPPORTED_CONTRACT_VERSIONS = [
   { contractType: "ExpiringMultiParty", contractVersion: "2.0.1" },
   { contractType: "Perpetual", contractVersion: "2.0.1" },
+  { contractType: "ExpiringMultiParty", contractVersion: "sumero-forked" },
+  { contractType: "Perpetual", contractVersion: "sumero-forked" },
 ];
 
 // Versions that unit tests will test against. Note we dont test anything less than 2.0.1 as all older contracts have
@@ -16,6 +18,8 @@ export const SUPPORTED_CONTRACT_VERSIONS = [
 export const TESTED_CONTRACT_VERSIONS = [
   { contractType: "ExpiringMultiParty", contractVersion: "2.0.1" },
   { contractType: "Perpetual", contractVersion: "2.0.1" },
+  { contractType: "ExpiringMultiParty", contractVersion: "sumero-forked" },
+  { contractType: "Perpetual", contractVersion: "sumero-forked" },
 ];
 
 export const CORE_CONTRACTS_NODE_VERSION_MAPPING = {
@@ -26,7 +30,7 @@ export const CORE_CONTRACTS_NODE_VERSION_MAPPING = {
 // Typical workflow is:
 // const { getAbi, getBytecode } = require(getContractsNodePackageAliasForVersion(versionString));
 export function getContractsNodePackageAliasForVerion(version: string): string {
-  if (version === "latest") return "@uma/contracts-node";
+  if (version === "latest" || version === "sumero-forked") return "@uma/contracts-node";
   const isKey = (input: string): input is keyof typeof CORE_CONTRACTS_NODE_VERSION_MAPPING =>
     input in CORE_CONTRACTS_NODE_VERSION_MAPPING;
   if (!isKey(version)) throw new Error("Unknown version!");

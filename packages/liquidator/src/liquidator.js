@@ -133,7 +133,7 @@ class Liquidator {
       contractVersion: {
         value: undefined,
         isValid: (x) => {
-          return x === "2.0.1";
+          return x === "2.0.1" || x === "sumero-forked";
         },
       },
       // Start and end block define a window used to filter for contract events.
@@ -222,6 +222,7 @@ class Liquidator {
     // maxCollateralPerToken] ∴ maxCollateralPerToken >= startCollateralNetOfWithdrawal / startTokens. This criterion
     // checks for a positions correct capitalization, not collateralization. In order to liquidate a position that is
     // under collaterelaized (but over capitalized) The CR ratio needs to be included in the maxCollateralPerToken.
+    // To-do - Removed getLatestCumulativeFundingRateMultiplier as we have removed this from codebase and make it simpler
     const maxCollateralPerToken = this.toBN(scaledPrice)
       .mul(this.toBN(this.financialContractCRRatio))
       .mul(this.financialContractClient.getLatestCumulativeFundingRateMultiplier())

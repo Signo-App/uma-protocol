@@ -117,7 +117,12 @@ function addMnemonicToProvider(
   numKeys = parseInt(process.env.NUM_KEYS || "2"),
   keyOffset = process.env.KEY_OFFSET ? parseInt(process.env.KEY_OFFSET) : 0
 ): HDWalletProvider {
-  return new HDWalletProvider(mnemonic, provider, keyOffset, numKeys);
+  const wallet = new HDWalletProvider(mnemonic, provider, keyOffset, numKeys);
+  // Sumero-fix: modifying the default polling delay of hdwallet to avoid unnecessary eth calls
+  if (Number(process.env.POLLING_DELAY)) {
+    wallet.engine._blockTracker._pollingInterval = Number(process.env.POLLING_DELAY) * 1000;
+  }
+  return wallet;
 }
 
 function addGckmsToProvider(provider: AbstractProvider): ManagedSecretProvider {
