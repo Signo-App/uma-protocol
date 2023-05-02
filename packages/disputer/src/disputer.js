@@ -231,13 +231,14 @@ class Disputer {
       : this.account;
 
     // Can only derive rewards from disputed liquidations that this account disputed.
-    const disputedLiquidations = this.financialContractClient.getDisputedLiquidations().filter((liquidation) => {
-      // Sumero-fix: WITHDRAW_ALL_LIQUIDATIONS instructs the bot if bot need to trigger withdrawLiquidation for other users
-      // Currently Sumero doesn't support for users to call withdrawLiquidation from UI.
-      const shouldWithdrawAll = process.env.WITHDRAW_ALL_LIQUIDATIONS;
-      if (shouldWithdrawAll !== "0" && shouldWithdrawAll !== "false" && !!shouldWithdrawAll) return true;
-      return liquidation.disputer === disputerAddress;
-    });
+    let disputedLiquidations = this.financialContractClient.getDisputedLiquidations();
+
+    // Sumero-fix: WITHDRAW_ALL_LIQUIDATIONS instructs the bot if bot need to trigger withdrawLiquidation for other users
+    // Currently Sumero doesn't support for users to call withdrawLiquidation from UI.
+    const shouldWithdrawAll = process.env.WITHDRAW_ALL_LIQUIDATIONS;
+    if (!(shouldWithdrawAll !== "0" && shouldWithdrawAll !== "false" && !!shouldWithdrawAll)) {
+      disputedLiquidations = disputedLiquidations.filter((liquidation) => liquidation.disputer === disputerAddress);
+    }
 
     if (disputedLiquidations.length === 0) {
       this.logger.debug({ at: "Disputer", message: "No withdrawable disputes" });
