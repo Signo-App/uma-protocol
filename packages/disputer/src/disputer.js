@@ -235,8 +235,7 @@ class Disputer {
 
     // Sumero-fix: WITHDRAW_ALL_LIQUIDATIONS instructs the bot if bot need to trigger withdrawLiquidation for other users
     // Currently Sumero doesn't support for users to call withdrawLiquidation from UI.
-    const shouldWithdrawAll = process.env.WITHDRAW_ALL_LIQUIDATIONS;
-    if (!(shouldWithdrawAll !== "0" && shouldWithdrawAll !== "false" && !!shouldWithdrawAll)) {
+    if (!process.env.WITHDRAW_ALL_LIQUIDATIONS) {
       // Here the bot will just call withdrawLiquidation for the disputes that were created by bot only
       disputedLiquidations = disputedLiquidations.filter((liquidation) => liquidation.disputer === disputerAddress);
     }
@@ -253,7 +252,7 @@ class Disputer {
         liquidation: JSON.stringify(liquidation),
       });
 
-      if (shouldWithdrawAll !== "0" && shouldWithdrawAll !== "false" && !!shouldWithdrawAll) {
+      if (process.env.WITHDRAW_ALL_LIQUIDATIONS) {
         this.logger.info({ at: "Disputer", message: "Calling withdrawLiquidation for all users 🥁" });
       }
       // Construct transaction.
