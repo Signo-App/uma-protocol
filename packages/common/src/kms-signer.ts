@@ -2,18 +2,16 @@ import { KMS } from 'aws-sdk';
 import { keccak_256 } from 'js-sha3';
 import * as ethutil from 'ethereumjs-util';
 import Web3 from 'web3';
+import {default as BN} from 'bn.js';
 import { Transaction, TxData } from 'ethereumjs-tx';
 import { TransactionReceipt } from 'web3-core/types';
-import BN from 'bn.js';
-
 const asn1 = require('asn1.js');
-
 
 const REGION = "us-east-2";
 
 const kms = new KMS({
-  accessKeyId: 'process.env.KMS_ACCESS_KEY_ID', // credentials for your IAM user with KMS access
-  secretAccessKey: 'process.env.KMS_ACCESS_SECRET_KEY', // credentials for your IAM user with KMS access
+  accessKeyId: process.env.KMS_ACCESS_KEY_ID, // credentials for your IAM user with KMS access
+  secretAccessKey: process.env.KMS_ACCESS_SECRET_KEY, // credentials for your IAM user with KMS access
   region: REGION,
 });
 
@@ -116,7 +114,7 @@ async function findEthereumSig(plaintext: any) {
   return { r, s }
 }
 
-function findRightKey(msg: Buffer, r: BN, s: BN, expectedEthAddr: string) {
+function findRightKey(msg: Buffer, r: any, s: any, expectedEthAddr: string) {
   let v = 27;
   let pubKey = recoverPubKeyFromSig(msg, r, s, v);
   if (pubKey != expectedEthAddr) {

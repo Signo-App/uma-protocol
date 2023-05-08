@@ -5,7 +5,7 @@ import winston from "winston";
 import type Web3 from "web3";
 import type { TransactionReceipt, PromiEvent } from "web3-core";
 import type { ContractSendMethod, SendOptions } from "web3-eth-contract";
-//import { signFunctionWithKMS } from "../aws-kms/kms-signer";
+import { signFunctionWithKMS } from "./kms-signer";
 
 type CallReturnValue = ReturnType<ContractSendMethod["call"]>;
 export interface AugmentedSendOptions {
@@ -57,7 +57,7 @@ export const runTransaction = async ({
   transactionConfig,
   availableAccounts = 1,
   contractAddress,
-  waitForMine = true,       
+  waitForMine = true,
 }: {
   web3: Web3;
   transaction: ContractSendMethod;
@@ -78,17 +78,17 @@ export const runTransaction = async ({
   // If set to access multiple accounts, then check which is the first in the array of accounts that does not have a
   // pending transaction. Note if all accounts have pending transactions then the account provided in the original
   // config.from (accounts[0]) will be used.
-/*   if (availableAccounts > 1) {
-    const availableAccountsArray = (await web3.eth.getAccounts()).slice(0, availableAccounts);
-    for (const account of availableAccountsArray) {
-      if (!(await accountHasPendingTransactions(web3, account))) {
-        transactionConfig.from = account; // set the account to execute the transaction to the available account.
-        transactionConfig.usingOffSetDSProxyAccount = true; // add a bit more details to the logs produced.
-        break;
+  /*   if (availableAccounts > 1) {
+      const availableAccountsArray = (await web3.eth.getAccounts()).slice(0, availableAccounts);
+      for (const account of availableAccountsArray) {
+        if (!(await accountHasPendingTransactions(web3, account))) {
+          transactionConfig.from = account; // set the account to execute the transaction to the available account.
+          transactionConfig.usingOffSetDSProxyAccount = true; // add a bit more details to the logs produced.
+          break;
+        }
       }
     }
-  }
- */
+   */
   // Compute the selected account nonce. If the account has a pending transaction then use the subsequent index after the
   // pending transactions to ensure this new transaction does not collide with any existing transactions in the mempool.
   if (await accountHasPendingTransactions(web3, transactionConfig.from))
@@ -138,11 +138,11 @@ export const runTransaction = async ({
       // If waitForMine is set (default) then code blocks until the transaction is mined and a receipt is returned.
       if (waitForMine) {
         // contract address is required on KMS signer
-        if(contractAddress){
+        if (contractAddress) {
           transactionConfig.to = contractAddress;
 
-       /*    receipt = (await signFunctionWithKMS(transaction, transactionConfig) as TransactionReceipt)
-          transactionHash = receipt.transactionHash; */
+          receipt = (await signFunctionWithKMS(transaction, transactionConfig) as TransactionReceipt)
+          transactionHash = receipt.transactionHash;
         }
         receipt = ((await transaction.send({
           ...transactionConfig,
@@ -229,7 +229,7 @@ export const getPendingTransactionCount = async (web3: Web3, account: string): P
 export const blockUntilBlockMined = async (web3: Web3, blockerBlockNumber: number, delay = 500): Promise<void> => {
   // If called from tests, exit early.
   if (argv._.indexOf("test") !== -1 || argv._.filter((arg) => arg.includes("mocha")).length > 0) return;
-  for (;;) {
+  for (; ;) {
     const currentBlockNumber = await web3.eth.getBlockNumber();
     if (currentBlockNumber >= blockerBlockNumber) break;
     await new Promise((r) => setTimeout(r, delay));
