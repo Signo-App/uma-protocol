@@ -264,7 +264,10 @@ class Disputer {
         const { receipt, transactionConfig } = await runTransaction({
           web3: this.web3,
           transaction: withdraw,
-          transactionConfig: { ...this.gasEstimator.getCurrentFastPrice(), from: this.account },
+          contractAddress: this.financialContract.options.address,
+          // TODO save the signer address in somewhere
+
+          transactionConfig: { ...this.gasEstimator.getCurrentFastPrice(), from: "0x079715eCfC8d785BFB517184B64c953a890b0fBF" },
         });
         let logResult = {
           tx: receipt.transactionHash,
@@ -272,7 +275,7 @@ class Disputer {
           settlementPrice: receipt.events.LiquidationWithdrawn.returnValues.settlementPrice,
           liquidationStatus:
             PostWithdrawLiquidationRewardsStatusTranslations[
-              receipt.events.LiquidationWithdrawn.returnValues.liquidationStatus
+            receipt.events.LiquidationWithdrawn.returnValues.liquidationStatus
             ],
         };
 

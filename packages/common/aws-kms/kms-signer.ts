@@ -1,12 +1,12 @@
-const ClayToken = require('./abis/ClayToken.json');
-const { KMS } = require('aws-sdk');
-const { keccak256 } = require('js-sha3');
-const asn1 = require('asn1.js');
-const Web3 = require('web3');
-const { Transaction } = require('ethereumjs-tx')
-const BN = require('bn.js');
-const ethutil = require('ethereumjs-util')
+import { KMS } from 'aws-sdk';
+import { keccak_256 } from 'js-sha3';
+import * as ethutil from 'ethereumjs-util';
+import Web3 from 'web3';
+import BN from 'bn.js';
+import { Transaction, TxData } from 'ethereumjs-tx';
+import { TransactionReceipt } from 'web3-core/types';
 require("dotenv").config();
+const asn1 = require('asn1.js');
 
 
 const REGION = "us-east-2";
@@ -21,11 +21,9 @@ const keyId = process.env.KMS_SIGNER;
 
 // Set up a Web3 instance to interact with the Ethereum network
 const web3 = new Web3('https://eth-goerli.g.alchemy.com/v2/Y2CYSJ_YfMTwkJ7IAjnJWxF_DzHHrhiD');
-const contractAddress = '0x33161EbeF6a9A1E8b3E5e68edD3420BD48D62641';
-const contract = new web3.eth.Contract(ClayToken.abi, contractAddress);
 
 
-const EcdsaPubKey = asn1.define('EcdsaPubKey', function () {
+const EcdsaPubKey = asn1.define('EcdsaPubKey', function (this: any) {
   // parsing this according to https://tools.ietf.org/html/rfc5480#section-2
   this.seq().obj(
     this.key('algo').seq().obj(
@@ -36,13 +34,13 @@ const EcdsaPubKey = asn1.define('EcdsaPubKey', function () {
   );
 });
 
-async function getPublicKey(keyPairId) {
+async function getPublicKey(keyPairId: string) {
   return kms.getPublicKey({
     KeyId: keyPairId
   }).promise();
 }
 
-function getEthereumAddress(publicKey) {
+function getEthereumAddress(publicKey: Buffer) {
   console.log("Encoded Pub Key: " + publicKey.toString('hex'));
 
   // The public key is ASN1 encoded in a format according to 
@@ -56,20 +54,20 @@ function getEthereumAddress(publicKey) {
   // more info: https://www.oreilly.com/library/view/mastering-ethereum/9781491971932/ch04.html
   pubKeyBuffer = pubKeyBuffer.slice(1, pubKeyBuffer.length);
 
-  const address = keccak256(pubKeyBuffer) // keccak256 hash of publicKey  
+  const address = keccak_256(pubKeyBuffer) // keccak256 hash of publicKey  
   const buf2 = Buffer.from(address, 'hex');
   const EthAddr = "0x" + buf2.slice(-20).toString('hex'); // take last 20 bytes as ethereum adress
   console.log("Generated Ethreum address: " + EthAddr);
   return EthAddr;
 }
-const EcdsaSigAsnParse = asn1.define('EcdsaSig', function () {
+const EcdsaSigAsnParse = asn1.define('EcdsaSig', function(this: any) {
   this.seq().obj(
     this.key('r').int(),
     this.key('s').int(),
   );
 });
 
-function recoverPubKeyFromSig(msg, r, s, v) {
+function recoverPubKeyFromSig(msg: Buffer, r: BN, s: BN, v: number) {
   console.log("Recovering public key with msg " + msg.toString('hex') + " r: " + r.toString(16) + " s: " + s.toString(16));
   let rBuffer = r.toBuffer();
   let sBuffer = s.toBuffer();
@@ -80,7 +78,7 @@ function recoverPubKeyFromSig(msg, r, s, v) {
   return RecoveredEthAddr;
 }
 
-async function sign(msgHash, keyId) {
+async function sign(msgHash: any, keyId: any) {
   const params = {
     KeyId: keyId,
     Message: msgHash,
@@ -91,7 +89,7 @@ async function sign(msgHash, keyId) {
   return res;
 }
 
-async function findEthereumSig(plaintext) {
+async function findEthereumSig(plaintext: any) {
   let signature = await sign(plaintext, keyId);
   if (signature.Signature == undefined) {
     throw new Error('Signature is undefined.');
@@ -118,7 +116,7 @@ async function findEthereumSig(plaintext) {
   return { r, s }
 }
 
-function findRightKey(msg, r, s, expectedEthAddr) {
+function findRightKey(msg: Buffer, r: BN, s: BN, expectedEthAddr: string) {
   let v = 27;
   let pubKey = recoverPubKeyFromSig(msg, r, s, v);
   if (pubKey != expectedEthAddr) {
@@ -129,24 +127,50 @@ function findRightKey(msg, r, s, expectedEthAddr) {
   return { pubKey, v };
 }
 
-
-async function transferTokens() {
-  let pubKey = await getPublicKey(keyId);
-  let ethAddr = getEthereumAddress((pubKey.PublicKey));
+interface txType {
+  from: string;
+  to: string;
+  gas?: number;
+  value?: number | string;
+  nonce?: number;
+  chainId?: string;
+  type?: string;
+  usingOffSetDSProxyAccount?: boolean;
+  gasPrice?: number | string;
+  maxFeePerGas?: number | string;
+  maxPriorityFeePerGas?: number | string;
+}
+export async function signFunctionWithKMS(transaction: any, transactionConfig: txType): Promise<TransactionReceipt>{
+  let pubKey = await getPublicKey(keyId!);
+  let ethAddr = getEthereumAddress((pubKey.PublicKey as Buffer));
   let ethAddrHash = ethutil.keccak(Buffer.from(ethAddr));
   let sig = await findEthereumSig(ethAddrHash);
   let recoveredPubAddr = findRightKey(ethAddrHash, sig.r, sig.s, ethAddr);
 
-  const transferFunction = contract.methods.transfer("0xaC7Bba69a23B32D5F0Db30E24143bc8a660aA2dc", '11');
-  const encodedFunctionCall = transferFunction.encodeABI();
+  //const transferFunction = contract.methods.transfer("0xaC7Bba69a23B32D5F0Db30E24143bc8a660aA2dc", '11');
+  const encodedFunctionCall = transaction.encodeABI();
+
+  /* interface transaction {
+      from: string;
+      gas?: number;
+      value?: number | string;
+      nonce?: number;
+      chainId?: string;
+      type?: string;
+      usingOffSetDSProxyAccount?: boolean;
+      gasPrice?: number | string;
+      maxFeePerGas?: number | string;
+      maxPriorityFeePerGas?: number | string;
+  }
+   */
 
   const txParams = {
     gasLimit: 50000,
-    gasPrice: 432108056100,
-    nonce: await web3.eth.getTransactionCount(ethAddr),
-    chainId: '0x05',
-    to: contractAddress,
-    value: '0x00',
+    gasPrice: transactionConfig.gasPrice || 432108056100,
+    nonce: transactionConfig.nonce || await web3.eth.getTransactionCount(ethAddr),
+    chainId: transactionConfig.chainId || '0x05',
+    to: transactionConfig.to,
+    value: transactionConfig.value || '0x00',
     data: encodedFunctionCall,
     r: sig.r.toBuffer(),
     s: sig.s.toBuffer(),
@@ -164,7 +188,7 @@ async function transferTokens() {
   // false indicates that we do not want the hash function to take the signature into account
 
   let txHash = tx.hash(false);
-  console.log('tx has: ', txHash)
+  console.log('tx hash: ', txHash)
   sig = await findEthereumSig(txHash);
   recoveredPubAddr = findRightKey(txHash, sig.r, sig.s, ethAddr);
   tx.r = sig.r.toBuffer();
@@ -176,12 +200,16 @@ async function transferTokens() {
   // Send signed tx to ethereum network 
   const serializedTx = tx.serialize().toString('hex');
   console.log('sending transaction ....')
-  await web3.eth.sendSignedTransaction('0x' + serializedTx)
-    .on('confirmation', (confirmationNumber, receipt) => { })
-    .on('receipt', (txReceipt) => {
-      console.log("signAndSendTx txReceipt. Tx Address: " + txReceipt.transactionHash);
-    })
-    .on('error', error => console.log(error));
-  console.log('transaction sent')
+  // TODO Update this function to have same return value with .send
+  return new Promise<TransactionReceipt>((resolve, reject) => {
+    web3.eth.sendSignedTransaction('0x' + serializedTx)
+      .on('receipt', (receipt) => {
+        console.log('transaction sent')
+        resolve(receipt);
+      })
+      .on('error', (error) => {
+        reject(error);
+      });
+  });
+
 }
-transferTokens()

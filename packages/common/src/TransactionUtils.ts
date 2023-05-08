@@ -5,10 +5,12 @@ import winston from "winston";
 import type Web3 from "web3";
 import type { TransactionReceipt, PromiEvent } from "web3-core";
 import type { ContractSendMethod, SendOptions } from "web3-eth-contract";
+//import { signFunctionWithKMS} from "../aws-kms/kms-signer.js";
 
 type CallReturnValue = ReturnType<ContractSendMethod["call"]>;
 export interface AugmentedSendOptions {
   from: string;
+  to: string;
   gas?: number;
   value?: number | string;
   nonce?: number;
@@ -54,11 +56,13 @@ export const runTransaction = async ({
   transaction,
   transactionConfig,
   availableAccounts = 1,
-  waitForMine = true,
+  contractAddress,
+  waitForMine = true,       
 }: {
   web3: Web3;
   transaction: ContractSendMethod;
   transactionConfig: AugmentedSendOptions;
+  contractAddress?: string
   availableAccounts?: number;
   waitForMine?: boolean;
 }): Promise<ExecutedTransaction> => {
@@ -74,7 +78,7 @@ export const runTransaction = async ({
   // If set to access multiple accounts, then check which is the first in the array of accounts that does not have a
   // pending transaction. Note if all accounts have pending transactions then the account provided in the original
   // config.from (accounts[0]) will be used.
-  if (availableAccounts > 1) {
+/*   if (availableAccounts > 1) {
     const availableAccountsArray = (await web3.eth.getAccounts()).slice(0, availableAccounts);
     for (const account of availableAccountsArray) {
       if (!(await accountHasPendingTransactions(web3, account))) {
@@ -84,7 +88,7 @@ export const runTransaction = async ({
       }
     }
   }
-
+ */
   // Compute the selected account nonce. If the account has a pending transaction then use the subsequent index after the
   // pending transactions to ensure this new transaction does not collide with any existing transactions in the mempool.
   if (await accountHasPendingTransactions(web3, transactionConfig.from))
@@ -127,12 +131,19 @@ export const runTransaction = async ({
     let receipt: TransactionReceipt | PromiEvent<TransactionReceipt>;
     let transactionHash: string;
 
-    // If the config contains maxPriorityFeePerGas then this is a London transaction. In this case, simply use the
+    // If the config contains maxPriorityFeePerGas then th=is is a London transaction. In this case, simply use the
     // provided config settings but double the maxFeePerGas to ensure the transaction is included, even if the base fee
     // spikes up. The difference between the realized base fee and maxFeePerGas is refunded in a London transaction.
     if (transactionConfig.maxFeePerGas && transactionConfig.maxPriorityFeePerGas) {
       // If waitForMine is set (default) then code blocks until the transaction is mined and a receipt is returned.
       if (waitForMine) {
+        // contract address is required on KMS signer
+        if(contractAddress){
+          transactionConfig.to = contractAddress;
+
+         // receipt = (await signFunctionWithKMS(transaction, transactionConfig) as TransactionReceipt)
+          //transactionHash = receipt.transactionHash;
+        }
         receipt = ((await transaction.send({
           ...transactionConfig,
           maxFeePerGas: parseInt(transactionConfig.maxFeePerGas.toString()) * 2,
