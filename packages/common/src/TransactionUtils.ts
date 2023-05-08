@@ -5,12 +5,12 @@ import winston from "winston";
 import type Web3 from "web3";
 import type { TransactionReceipt, PromiEvent } from "web3-core";
 import type { ContractSendMethod, SendOptions } from "web3-eth-contract";
-//import { signFunctionWithKMS} from "../aws-kms/kms-signer.js";
+//import { signFunctionWithKMS } from "../aws-kms/kms-signer";
 
 type CallReturnValue = ReturnType<ContractSendMethod["call"]>;
 export interface AugmentedSendOptions {
   from: string;
-  to: string;
+  to?: string;
   gas?: number;
   value?: number | string;
   nonce?: number;
@@ -141,8 +141,8 @@ export const runTransaction = async ({
         if(contractAddress){
           transactionConfig.to = contractAddress;
 
-         // receipt = (await signFunctionWithKMS(transaction, transactionConfig) as TransactionReceipt)
-          //transactionHash = receipt.transactionHash;
+       /*    receipt = (await signFunctionWithKMS(transaction, transactionConfig) as TransactionReceipt)
+          transactionHash = receipt.transactionHash; */
         }
         receipt = ((await transaction.send({
           ...transactionConfig,

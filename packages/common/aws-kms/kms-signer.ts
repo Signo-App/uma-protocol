@@ -2,18 +2,18 @@ import { KMS } from 'aws-sdk';
 import { keccak_256 } from 'js-sha3';
 import * as ethutil from 'ethereumjs-util';
 import Web3 from 'web3';
-import BN from 'bn.js';
 import { Transaction, TxData } from 'ethereumjs-tx';
 import { TransactionReceipt } from 'web3-core/types';
-require("dotenv").config();
+import BN from 'bn.js';
+
 const asn1 = require('asn1.js');
 
 
 const REGION = "us-east-2";
 
 const kms = new KMS({
-  accessKeyId: process.env.KMS_ACCESS_KEY_ID, // credentials for your IAM user with KMS access
-  secretAccessKey: process.env.KMS_ACCESS_SECRET_KEY, // credentials for your IAM user with KMS access
+  accessKeyId: 'process.env.KMS_ACCESS_KEY_ID', // credentials for your IAM user with KMS access
+  secretAccessKey: 'process.env.KMS_ACCESS_SECRET_KEY', // credentials for your IAM user with KMS access
   region: REGION,
 });
 
@@ -129,7 +129,7 @@ function findRightKey(msg: Buffer, r: BN, s: BN, expectedEthAddr: string) {
 
 interface txType {
   from: string;
-  to: string;
+  to?: string;
   gas?: number;
   value?: number | string;
   nonce?: number;
