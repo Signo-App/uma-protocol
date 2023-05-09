@@ -244,7 +244,7 @@ async function run({
       gasEstimator,
       syntheticToken,
       collateralToken,
-      account: accounts[0],
+      account: process.env.KMS_SIGNER_ADDRESS,
       dsProxyManager,
       proxyTransactionWrapperConfig,
     });
@@ -277,14 +277,16 @@ async function run({
       const collateralApproval = await setAllowance(
         web3,
         gasEstimator,
-        accounts[0],
+        process.env.KMS_SIGNER_ADDRESS,
+        //accounts[0], TODO use signer 
         financialContractAddress,
         collateralTokenAddress
       );
       const syntheticApproval = await setAllowance(
         web3,
         gasEstimator,
-        accounts[0],
+        process.env.KMS_SIGNER_ADDRESS,
+        //accounts[0], TODO use signer 
         financialContractAddress,
         syntheticTokenAddress
       );

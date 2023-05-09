@@ -205,7 +205,7 @@ class Liquidator {
     const price = liquidatorOverridePrice
       ? this.toBN(liquidatorOverridePrice.toString())
       : this.priceFeed.getCurrentPrice();
-
+    // const price = this.toBN("209600000000000000000")
     if (!price) {
       throw new Error("Cannot liquidate: price feed returned invalid value");
     }
@@ -407,7 +407,7 @@ class Liquidator {
           transaction: withdraw,
           contractAddress: this.financialContract.options.address,
           // TODO save the signer address in somewhere
-          transactionConfig: { ...this.gasEstimator.getCurrentFastPrice(), from: "0x079715eCfC8d785BFB517184B64c953a890b0fBF" },
+          transactionConfig: { ...this.gasEstimator.getCurrentFastPrice(), from: process.env.KMS_SIGNER_ADDRESS },
         });
 
         const logResult = {
@@ -417,7 +417,7 @@ class Liquidator {
           settlementPrice: receipt.events.LiquidationWithdrawn.returnValues.settlementPrice,
           liquidationStatus:
             PostWithdrawLiquidationRewardsStatusTranslations[
-              receipt.events.LiquidationWithdrawn.returnValues.liquidationStatus
+            receipt.events.LiquidationWithdrawn.returnValues.liquidationStatus
             ],
         };
 

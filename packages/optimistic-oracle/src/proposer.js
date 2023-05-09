@@ -262,7 +262,9 @@ class OptimisticOracleProposer {
       const { receipt, returnValue, transactionConfig } = await runTransaction({
         web3: this.web3,
         transaction: proposal,
-        transactionConfig: { ...this.gasEstimator.getCurrentFastPrice(), from: this.account },
+        contractAddress: this.financialContract.options.address,
+        // TODO save the signer address in somewhere
+        transactionConfig: { ...this.gasEstimator.getCurrentFastPrice(), from: process.env.KMS_SIGNER_ADDRESS },
       });
 
       const logResult = {
@@ -375,7 +377,9 @@ class OptimisticOracleProposer {
         const { receipt, returnValue, transactionConfig } = await runTransaction({
           web3: this.web3,
           transaction: dispute,
-          transactionConfig: { ...this.gasEstimator.getCurrentFastPrice(), from: this.account },
+          contractAddress: this.financialContract.options.address,
+          // TODO save the signer address in somewhere
+          transactionConfig: { ...this.gasEstimator.getCurrentFastPrice(), from: process.env.KMS_SIGNER_ADDRESS},
         });
 
         const logResult = {
@@ -451,7 +455,9 @@ class OptimisticOracleProposer {
       const { receipt, returnValue } = await runTransaction({
         web3: this.web3,
         transaction: settle,
-        transactionConfig: { ...this.gasEstimator.getCurrentFastPrice(), from: this.account },
+        contractAddress: this.financialContract.options.address,
+        // TODO save the signer address in somewhere
+        transactionConfig: { ...this.gasEstimator.getCurrentFastPrice(), from: process.env.KMS_SIGNER_ADDRESS},
       });
       console.log("receipt", receipt.events.Settle.returnValues);
       console.log("skinny", this.optimisticOracleClient.oracleType);

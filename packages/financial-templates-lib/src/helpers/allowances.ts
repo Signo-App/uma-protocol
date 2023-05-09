@@ -34,7 +34,9 @@ export const setAllowance = async (
     const { receipt } = await runTransaction({
       web3,
       transaction: (approveTransaction as unknown) as ContractSendMethod,
-      transactionConfig: { ...gasEstimator.getCurrentFastPrice(), from: ownerAddress },
+      contractAddress: collateralToken.options.address,
+      // TODO save the signer address in somewhere
+      transactionConfig: { ...gasEstimator.getCurrentFastPrice(), from: process.env.KMS_SIGNER_ADDRESS!},
     });
     return { tx: receipt as TransactionReceipt, spenderAddress, currencyAddress };
   }

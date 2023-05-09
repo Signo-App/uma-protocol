@@ -111,7 +111,7 @@ class ProxyTransactionWrapper {
         transaction: dispute,
         contractAddress: this.financialContract.options.address,
         // TODO save the signer address in somewhere
-        transactionConfig: { ...this.gasEstimator.getCurrentFastPrice(), from: "0x079715eCfC8d785BFB517184B64c953a890b0fBF" },
+        transactionConfig: { ...this.gasEstimator.getCurrentFastPrice(), from: process.env.KMS_SIGNER_ADDRESS},
       });
 
       return {
