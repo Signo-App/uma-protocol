@@ -212,6 +212,7 @@ class ProxyTransactionWrapper {
         transactionConfig,
       };
     } catch (error) {
+      console.log('error: ', error)
       return error;
     }
   }

@@ -3,8 +3,10 @@ import { keccak_256 } from 'js-sha3';
 import * as ethutil from 'ethereumjs-util';
 import Web3 from 'web3';
 import { default as BN } from 'bn.js';
-import { Transaction, TxData } from 'ethereumjs-tx';
 import { TransactionReceipt } from 'web3-core/types';
+import { ethers, UnsignedTransaction } from "ethers";
+import type { ContractSendMethod, SendOptions } from "web3-eth-contract";
+
 const asn1 = require('asn1.js');
 
 const REGION = "us-east-2";
@@ -125,57 +127,48 @@ function findRightKey(msg: Buffer, r: any, s: any, expectedEthAddr: string) {
   return { pubKey, v };
 }
 
-// TODO Use FeeMarketEIP1559Transaction to avoid gas issues
-export async function signFunctionWithKMS(transaction: any, transactionConfig: any): Promise<TransactionReceipt> {
+async function _signDigest(digestString: string): Promise<string> {
   let pubKey = await getPublicKey(keyId!);
   let ethAddr = getEthereumAddress((pubKey.PublicKey as Buffer));
-  let ethAddrHash = ethutil.keccak(Buffer.from(ethAddr));
-  let sig = await findEthereumSig(ethAddrHash);
-  let recoveredPubAddr = findRightKey(ethAddrHash, sig.r, sig.s, ethAddr);
+
+  const digestBuffer = Buffer.from(ethers.utils.arrayify(digestString));
+  const sig = await findEthereumSig(digestBuffer);
+  const { v } = findRightKey(digestBuffer, sig.r, sig.s, ethAddr);
+  return ethers.utils.joinSignature({
+    v,
+    r: `0x${sig.r.toString("hex")}`,
+    s: `0x${sig.s.toString("hex")}`,
+  });
+}
+
+export async function signFunctionWithKMS(transaction: ContractSendMethod, transactionConfig: any): Promise<TransactionReceipt> {
 
   //const transferFunction = contract.methods.transfer("0xaC7Bba69a23B32D5F0Db30E24143bc8a660aA2dc", '11');
   const encodedFunctionCall = transaction.encodeABI();
 
-
-  const txParams = {
-    gasLimit: '0x11170',
-    gasPrice: '0x1DCD65000',
+  // EIP-1559 TX Type
+  const txParams: UnsignedTransaction = {
+    gasLimit:350000,
+    //double the maxFeePerGas to ensure the transaction is included
+    maxFeePerGas: parseInt(transactionConfig.maxFeePerGas.toString()) * 2,
+    maxPriorityFeePerGas: transactionConfig.maxPriorityFeePerGas,
     nonce: transactionConfig.nonce,
-    chainId: transactionConfig.chainId || '0x05',
     to: transactionConfig.to,
     value: transactionConfig.value || '0x00',
     data: encodedFunctionCall,
-    r: sig.r.toBuffer(),
-    s: sig.s.toBuffer(),
-    v: recoveredPubAddr.v
+    type: 2,
+    chainId: 5
   }
-  console.log(txParams);
+  console.log('TX Params: ',txParams);
 
-  const tx = new Transaction(txParams, {
-    chain: 'goerli',
-  });
+  const serializedUnsignedTx = ethers.utils.serializeTransaction(<UnsignedTransaction>txParams);
+  const transactionSignature = await _signDigest(ethers.utils.keccak256(serializedUnsignedTx));
+  const serializedTx = ethers.utils.serializeTransaction(<UnsignedTransaction>txParams, transactionSignature);
 
-  // signing the 2nd time
-  // this time we're signing the hash of the actual transaction
-  // tx.hash calculates the hash
-  // false indicates that we do not want the hash function to take the signature into account
+  console.log('sending transaction ....')
 
-  let txHash = tx.hash(false);
-  //console.log('tx hash: ', txHash)
-  sig = await findEthereumSig(txHash);
-  recoveredPubAddr = findRightKey(txHash, sig.r, sig.s, ethAddr);
-  tx.r = sig.r.toBuffer();
-  tx.s = sig.s.toBuffer();
-  tx.v = new BN(recoveredPubAddr.v).toBuffer();
-  //console.log(tx.getSenderAddress().toString('hex'));
-
-
-  // Send signed tx to ethereum network 
-  const serializedTx = tx.serialize().toString('hex');
-  //console.log('sending transaction ....')
-  // TODO Update this function to have same return value with .send
   return new Promise<TransactionReceipt>((resolve, reject) => {
-    web3.eth.sendSignedTransaction('0x' + serializedTx)
+    web3.eth.sendSignedTransaction(serializedTx)
       .on('receipt', (receipt) => {
         console.log('transaction sent')
         resolve(receipt);
