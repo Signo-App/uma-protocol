@@ -17,7 +17,6 @@ export class HmLandRegistryPriceFeed extends PriceFeedInterface {
    * @notice Constructs the TwelveDataApiPriceFeed.
    * @param {Object} logger Winston module used to send logs.
    * @param {String} index String used in query to fetch index data, i.e. "URTH"
-   * @param {String} apiKey apiKey for TwelveData api
    * @param {Integer} lookback How far in the past the historical prices will be available using getHistoricalPrice.
    * @param {Object} networker Used to send the API requests.
    * @param {Function} getTime Returns the current time.
@@ -28,7 +27,7 @@ export class HmLandRegistryPriceFeed extends PriceFeedInterface {
   constructor(
     private readonly logger: Logger,
     private readonly index: string,
-    private readonly lookback: number, // lookback should ideally be 4 days to account for NYSE weekends and holidays
+    private readonly lookback: number, // lookback should ideally be 90 days
     private readonly networker: NetworkerInterface,
     private readonly getTime: () => Promise<number>,
     private readonly priceFeedDecimals = 18,
@@ -41,10 +40,11 @@ export class HmLandRegistryPriceFeed extends PriceFeedInterface {
     this.priceHistory = [];
 
     this.convertPriceFeedDecimals = (number) => {
-      return Web3.utils.toBN(parseFixed(number.toString().substring(0, priceFeedDecimals), priceFeedDecimals).toString());
+      return Web3.utils.toBN(
+        parseFixed(number.toString().substring(0, priceFeedDecimals), priceFeedDecimals).toString());
     };
   }
-  public async update(ancillaryData?: string): Promise<void> {
+  public async update(): Promise<void> {
     const currentTime = await this.getTime();
 
     // Return early if the last call was too recent.
@@ -63,9 +63,9 @@ export class HmLandRegistryPriceFeed extends PriceFeedInterface {
     const endDateTime = currentTime;
     const startLookbackWindow = endDateTime - this.lookback;
 
-    const endDateTimeString = this._secondToDateTime(currentTime);
-    const startDateTimeString = this._secondToDateTime(startLookbackWindow);
-
+    const endDateTimeString = this._secondToDate(currentTime);
+    const startDateTimeString = this._secondToDate(startLookbackWindow);
+    console.log("endDateTimeString", endDateTimeString);
 
     this.logger.debug({
       at: "HmLandRegistryPriceFeed",
@@ -130,7 +130,7 @@ ORDER BY DESC(?date)
 
 
     // 3. Check responses.
-    if (!historyResponse?.results || historyResponse.status !== 200 || historyResponse.results.length === 0) {
+    if (!historyResponse?.results.bindings || historyResponse.results.bindings.length === 0) {
       throw new Error(`🚨Could not parse price result from url ${url}: ${JSON.stringify(historyResponse)}`);
     }
 
@@ -144,6 +144,12 @@ ORDER BY DESC(?date)
             value: this.convertPriceFeedDecimals(dailyData.hpi.value),
           }
         });
+
+     // checks if the UKHPI value is being returned correctly   
+      newHistoricalPricePeriods.forEach((item: any) => {
+          console.log('hpi value:', item.value.toString());
+      });
+
 
     // 5. Store results.
     this.currentPrice = newHistoricalPricePeriods[newHistoricalPricePeriods.length - 1].value;
@@ -170,6 +176,7 @@ ORDER BY DESC(?date)
         break;
       }
     }
+    console.log("first price:", firstPrice);
 
     // If there are no valid price periods, return null.
     if (!firstPrice) {
@@ -233,7 +240,7 @@ ORDER BY DESC(?date)
     return this.priceFeedDecimals;
   }
 
-  private _secondToDateTime(inputSecond: number) {
+  private _secondToDate(inputSecond: number) {
     return moment.unix(inputSecond).format("YYYY-MM-DD");
   }
   private _dateTimeToSecond(inputDateTime: string, endOfDay = false) {
