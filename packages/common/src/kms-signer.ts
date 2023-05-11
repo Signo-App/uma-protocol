@@ -1,11 +1,12 @@
 import { KMS } from 'aws-sdk';
 import { keccak_256 } from 'js-sha3';
 import * as ethutil from 'ethereumjs-util';
-import Web3 from 'web3';
 import { default as BN } from 'bn.js';
 import { TransactionReceipt } from 'web3-core/types';
 import { ethers, UnsignedTransaction } from "ethers";
 import type { ContractSendMethod, SendOptions } from "web3-eth-contract";
+import type Web3 from "web3";
+
 
 const asn1 = require('asn1.js');
 
@@ -17,11 +18,7 @@ const kms = new KMS({
   region: REGION,
 });
 
-const keyId = process.env.KMS_SIGNER;
-
-// Set up a Web3 instance to interact with the Ethereum network
-const web3 = new Web3('https://eth-goerli.g.alchemy.com/v2/Y2CYSJ_YfMTwkJ7IAjnJWxF_DzHHrhiD');
-
+const keyId = process.env.KMS_SIGNER!;
 
 const EcdsaPubKey = asn1.define('EcdsaPubKey', function (this: any) {
   // parsing this according to https://tools.ietf.org/html/rfc5480#section-2
@@ -78,7 +75,8 @@ function recoverPubKeyFromSig(msg: Buffer, r: BN, s: BN, v: number) {
   return RecoveredEthAddr;
 }
 
-async function sign(msgHash: any, keyId: any) {
+// Signs message with KMS
+async function sign(msgHash: any) {
   const params = {
     KeyId: keyId,
     Message: msgHash,
@@ -89,20 +87,11 @@ async function sign(msgHash: any, keyId: any) {
   return res;
 }
 
-async function findEthereumSig(plaintext: any) {
-  let signature = await sign(plaintext, keyId);
-  if (signature.Signature == undefined) {
-    throw new Error('Signature is undefined.');
-  }
-  //console.log("encoded sig: " + signature.Signature.toString('hex'));
-
-  let decoded = EcdsaSigAsnParse.decode(signature.Signature, 'der');
+async function findEthereumSig(signature: Buffer) {
+  let decoded = EcdsaSigAsnParse.decode(signature, 'der');
   let r = decoded.r;
   let s = decoded.s;
-  //console.log("r: " + r.toString(10));
-  //console.log("s: " + s.toString(10));
-
-  let tempsig = r.toString(16) + s.toString(16);
+  //let tempsig = r.toString(16) + s.toString(16);
 
   let secp256k1N = new BN("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141", 16); // max value on the curve
   let secp256k1halfN = secp256k1N.div(new BN(2)); // half of the curve
@@ -127,12 +116,21 @@ function findRightKey(msg: Buffer, r: any, s: any, expectedEthAddr: string) {
   return { pubKey, v };
 }
 
+export async function requestKmsSignature(plaintext: Buffer) {
+  const signature = await sign(plaintext);
+  if (signature.$response.error || signature.Signature === undefined) {
+    throw new Error(`AWS KMS call failed with: ${signature.$response.error}`);
+  }
+  //console.log("encoded sig: " + signature.Signature.toString('hex'));
+  return findEthereumSig(signature.Signature as Buffer);
+}
+
 async function _signDigest(digestString: string): Promise<string> {
-  let pubKey = await getPublicKey(keyId!);
+  let pubKey = await getPublicKey(keyId);
   let ethAddr = getEthereumAddress((pubKey.PublicKey as Buffer));
 
   const digestBuffer = Buffer.from(ethers.utils.arrayify(digestString));
-  const sig = await findEthereumSig(digestBuffer);
+  const sig = await requestKmsSignature(digestBuffer);
   const { v } = findRightKey(digestBuffer, sig.r, sig.s, ethAddr);
   return ethers.utils.joinSignature({
     v,
@@ -141,14 +139,14 @@ async function _signDigest(digestString: string): Promise<string> {
   });
 }
 
-export async function signFunctionWithKMS(transaction: ContractSendMethod, transactionConfig: any): Promise<TransactionReceipt> {
 
-  //const transferFunction = contract.methods.transfer("0xaC7Bba69a23B32D5F0Db30E24143bc8a660aA2dc", '11');
+export async function sendTxWithKMS(_web3: Web3, transaction: ContractSendMethod, transactionConfig: any): Promise<TransactionReceipt> {
+  const web3 = _web3;
   const encodedFunctionCall = transaction.encodeABI();
 
   // EIP-1559 TX Type
   const txParams: UnsignedTransaction = {
-    gasLimit:350000,
+    gasLimit: 350000,
     //double the maxFeePerGas to ensure the transaction is included
     maxFeePerGas: parseInt(transactionConfig.maxFeePerGas.toString()) * 2,
     maxPriorityFeePerGas: transactionConfig.maxPriorityFeePerGas,
@@ -159,7 +157,7 @@ export async function signFunctionWithKMS(transaction: ContractSendMethod, trans
     type: 2,
     chainId: 5
   }
-  console.log('TX Params: ',txParams);
+  console.log('TX Params: ', txParams);
 
   const serializedUnsignedTx = ethers.utils.serializeTransaction(<UnsignedTransaction>txParams);
   const transactionSignature = await _signDigest(ethers.utils.keccak256(serializedUnsignedTx));
@@ -167,15 +165,15 @@ export async function signFunctionWithKMS(transaction: ContractSendMethod, trans
 
   console.log('sending transaction ....')
 
-  return new Promise<TransactionReceipt>((resolve, reject) => {
-    web3.eth.sendSignedTransaction(serializedTx)
-      .on('receipt', (receipt) => {
-        console.log('transaction sent')
-        resolve(receipt);
-      })
-      .on('error', (error) => {
-        reject(error);
-      });
-  });
+     return new Promise<TransactionReceipt>((resolve, reject) => {
+      web3.eth.sendSignedTransaction(serializedTx)
+        .on('receipt', (receipt: TransactionReceipt) => {
+          console.log('transaction sent')
+          resolve(receipt);
+        })
+        .on('error', (error: any) => {
+          reject(error);
+        });
+    }); 
 
 }

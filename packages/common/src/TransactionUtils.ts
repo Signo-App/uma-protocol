@@ -5,7 +5,7 @@ import winston from "winston";
 import type Web3 from "web3";
 import type { TransactionReceipt, PromiEvent } from "web3-core";
 import type { ContractSendMethod, SendOptions } from "web3-eth-contract";
-import { signFunctionWithKMS } from "./kms-signer";
+import { sendTxWithKMS } from "./kms-signer";
 
 type CallReturnValue = ReturnType<ContractSendMethod["call"]>;
 export interface AugmentedSendOptions {
@@ -75,20 +75,6 @@ export const runTransaction = async ({
   // Multiplier applied to Truffle's estimated gas limit for a transaction to send.
   const GAS_LIMIT_BUFFER = 1.25;
 
-  // If set to access multiple accounts, then check which is the first in the array of accounts that does not have a
-  // pending transaction. Note if all accounts have pending transactions then the account provided in the original
-  // config.from (accounts[0]) will be used.
-  /*   if (availableAccounts > 1) {
-      const availableAccountsArray = (await web3.eth.getAccounts()).slice(0, availableAccounts);
-      for (const account of availableAccountsArray) {
-        if (!(await accountHasPendingTransactions(web3, account))) {
-          transactionConfig.from = account; // set the account to execute the transaction to the available account.
-          transactionConfig.usingOffSetDSProxyAccount = true; // add a bit more details to the logs produced.
-          break;
-        }
-      }
-    }
-   */
   // Compute the selected account nonce. If the account has a pending transaction then use the subsequent index after the
   // pending transactions to ensure this new transaction does not collide with any existing transactions in the mempool.
   if (await accountHasPendingTransactions(web3, transactionConfig.from))
@@ -135,44 +121,11 @@ export const runTransaction = async ({
     // provided config settings but double the maxFeePerGas to ensure the transaction is included, even if the base fee
     // spikes up. The difference between the realized base fee and maxFeePerGas is refunded in a London transaction.
     if (transactionConfig.maxFeePerGas && transactionConfig.maxPriorityFeePerGas) {
-      // If waitForMine is set (default) then code blocks until the transaction is mined and a receipt is returned.
-      if (waitForMine) {
-        // contract address is required on KMS signer
-        if (contractAddress) {
-          transactionConfig.to = contractAddress;
-
-          receipt = (await signFunctionWithKMS(transaction, transactionConfig) as TransactionReceipt)
-          transactionHash = receipt.transactionHash;
-        }
-        receipt = ((await transaction.send({
-          ...transactionConfig,
-          maxFeePerGas: parseInt(transactionConfig.maxFeePerGas.toString()) * 2,
-          type: "0x2",
-        } as SendOptions)) as unknown) as TransactionReceipt;
-        transactionHash = receipt.transactionHash;
-      }
-      // Else, waitForMine is false and we return the transaction hash immediately as soon as it is included in the
-      // mempool. Receipt is a promise of the pending transaction that can be awaited later to ensure block inclusion.
-      else {
-        receipt = (transaction.send({
-          ...transactionConfig,
-          maxFeePerGas: parseInt(transactionConfig.maxFeePerGas.toString()) * 2,
-          type: "0x2",
-        } as SendOptions) as unknown) as PromiEvent<TransactionReceipt>;
-        transactionHash = await new Promise((resolve, reject) => {
-          const _receipt = receipt as PromiEvent<TransactionReceipt>;
-          _receipt.on("transactionHash", (transactionHash) => resolve(transactionHash));
-          _receipt.on("error", (error) => reject(error));
-        });
-      }
-
-      // Else this is a legacy tx.
-    } else if (transactionConfig.gasPrice) {
-      receipt = ((await transaction.send({
-        ...transactionConfig,
-        gasPrice: transactionConfig.gasPrice.toString(),
-      })) as unknown) as TransactionReceipt;
+      // contract address is required on KMS signer
+      transactionConfig.to = contractAddress;
+      receipt = (await sendTxWithKMS(_web3,transaction, transactionConfig) as TransactionReceipt)
       transactionHash = receipt.transactionHash;
+
     } else throw new Error("No gas information provided");
 
     return { receipt, transactionHash, returnValue, transactionConfig };
