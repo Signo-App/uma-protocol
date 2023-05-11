@@ -14,9 +14,9 @@ export class HmLandRegistryPriceFeed extends PriceFeedInterface {
   private lastUpdateTime: number | null = null;
 
   /**
-   * @notice Constructs the TwelveDataApiPriceFeed.
+   * @notice Constructs the HmLandRegistryPriceFeed.
    * @param {Object} logger Winston module used to send logs.
-   * @param {String} index String used in query to fetch index data, i.e. "URTH"
+   * @param {String} index String used to identify the synth data that is being fetched from Hm Land Registry API i.e. "UKHPI"
    * @param {Integer} lookback How far in the past the historical prices will be available using getHistoricalPrice.
    * @param {Object} networker Used to send the API requests.
    * @param {Function} getTime Returns the current time.
@@ -27,7 +27,7 @@ export class HmLandRegistryPriceFeed extends PriceFeedInterface {
   constructor(
     private readonly logger: Logger,
     private readonly index: string,
-    private readonly lookback: number, // lookback should ideally be 90 days
+    private readonly lookback: number, // lookback must be at least 120 days for UKHPI
     private readonly networker: NetworkerInterface,
     private readonly getTime: () => Promise<number>,
     private readonly priceFeedDecimals = 18,
@@ -104,7 +104,7 @@ SELECT ?region ?date ?hpi
 
   FILTER (?region = <http://landregistry.data.gov.uk/id/region/united-kingdom>)
 }
-ORDER BY DESC(?date)
+ORDER BY ASC(?date)
 `;
 
     const params = `query=${encodeURIComponent(sparqlQuery)}&output=json`;
@@ -144,12 +144,6 @@ ORDER BY DESC(?date)
             value: this.convertPriceFeedDecimals(dailyData.hpi.value),
           }
         });
-
-     // checks if the UKHPI value is being returned correctly   
-      newHistoricalPricePeriods.forEach((item: any) => {
-          console.log('hpi value:', item.value.toString());
-      });
-
 
     // 5. Store results.
     this.currentPrice = newHistoricalPricePeriods[newHistoricalPricePeriods.length - 1].value;
