@@ -6,6 +6,22 @@ import type Web3 from "web3";
 import type { TransactionReceipt, PromiEvent } from "web3-core";
 import type { ContractSendMethod, SendOptions } from "web3-eth-contract";
 import { signFunctionWithKMS } from "./kms-signer";
+import { AwsKmsSigner } from "ethers-aws-kms-signer";
+import { ethers } from "ethers";
+
+// Setup AWS KMS 
+const kmsCredentials = {
+  accessKeyId: process.env.KMS_ACCESS_KEY_ID!, // credentials for your IAM user with KMS access
+  secretAccessKey: process.env.KMS_ACCESS_SECRET_KEY!, // credentials for your IAM user with KMS access
+  region: "us-east-2",
+  keyId: process.env.KMS_SIGNER!,
+};
+
+console.log("DEBUG ethers", ethers)
+const provider = ethers.providers.getDefaultProvider("goerli");
+let signer = new AwsKmsSigner(kmsCredentials);
+signer = signer.connect(provider as any);
+
 
 type CallReturnValue = ReturnType<ContractSendMethod["call"]>;
 export interface AugmentedSendOptions {
@@ -141,8 +157,47 @@ export const runTransaction = async ({
         if (contractAddress) {
           transactionConfig.to = contractAddress;
 
-          receipt = (await signFunctionWithKMS(transaction, transactionConfig) as TransactionReceipt)
-          transactionHash = receipt.transactionHash;
+        //   export type TransactionRequest = {
+        //     to?: string,
+        //     from?: string,
+        //     nonce?: BigNumberish,
+        
+        //     gasLimit?: BigNumberish,
+        //     gasPrice?: BigNumberish,
+        
+        //     data?: BytesLike,
+        //     value?: BigNumberish,
+        //     chainId?: number
+        
+        //     type?: number;
+        //     accessList?: AccessListish;
+        
+        //     maxPriorityFeePerGas?: BigNumberish;
+        //     maxFeePerGas?: BigNumberish;
+        
+        //     customData?: Record<string, any>;
+        //     ccipReadEnabled?: boolean;
+        // }
+
+          const transformedTxn = {
+            to: transactionConfig.to,
+            from: transactionConfig.from,
+            nonce: transactionConfig.nonce,
+
+            data: transaction.encodeABI(),
+            value: transactionConfig.value,
+            chainId: Number(transactionConfig.chainId),
+
+            type: 2,
+            maxPriorityFeePerGas: transactionConfig.maxPriorityFeePerGas,
+            maxFeePerGas: parseInt(transactionConfig.maxFeePerGas.toString()) * 2,
+
+          }
+          const txnResponse = await signer.sendTransaction(transformedTxn);
+
+          // receipt = (await signFunctionWithKMS(transaction, transactionConfig) as TransactionReceipt)
+          // transactionHash = receipt.transactionHash;
+          transactionHash = txnResponse.hash;
         }
         receipt = ((await transaction.send({
           ...transactionConfig,
