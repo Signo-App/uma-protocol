@@ -20,6 +20,7 @@ import { ExpressionPriceFeed, math, escapeSpecialCharacters } from "./Expression
 import { FallBackPriceFeed } from "./FallBackPriceFeed";
 import { ForexDailyPriceFeed } from "./ForexDailyPriceFeed";
 import { FundingRateMultiplierPriceFeed } from "./FundingRateMultiplierPriceFeed";
+import { HmLandRegistryPriceFeed } from "./HmLandRegistryPriceFeed";
 import { InvalidPriceFeedMock } from "./InvalidPriceFeedMock";
 import { LPPriceFeed } from "./LPPriceFeed";
 import { MedianizerPriceFeed } from "./MedianizerPriceFeed";
@@ -539,6 +540,24 @@ export async function createPriceFeed(
       config.index,
       config.apiQueryInterval,
       config.apiKey,
+      config.lookback,
+      networker,
+      getTime,
+      config.priceFeedDecimals,
+      config.minTimeBetweenUpdates
+    );
+  } else if (config.type === "HmLandRegistry-api") {
+    const requiredFields = ["index", "lookback"];
+
+    if (isMissingField(config, requiredFields, logger)) {
+      return null;
+    }
+
+    logger.debug({ at: "createPriceFeed", message: "Creating HmLandRegistryApiPriceFeed", config });
+
+    return new HmLandRegistryPriceFeed(
+      logger,
+      config.index,
       config.lookback,
       networker,
       getTime,
