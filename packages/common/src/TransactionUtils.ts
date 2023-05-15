@@ -137,6 +137,7 @@ export const runTransaction = async ({
     if (transactionConfig.maxFeePerGas && transactionConfig.maxPriorityFeePerGas) {
       // If waitForMine is set (default) then code blocks until the transaction is mined and a receipt is returned.
       if (waitForMine) {
+        console.log('waiting for mine...')
         receipt = await sendTransactionWrapper(transactionConfig, web3, transaction, contractAddress);
         transactionHash = receipt.transactionHash;
       }
@@ -161,7 +162,8 @@ export const runTransaction = async ({
       receipt = await sendTransactionWrapper(transactionConfig, web3, transaction, contractAddress);
       transactionHash = receipt.transactionHash;
     } else throw new Error("No gas information provided");
-
+    console.log('receipt: ', receipt)
+    console.log('transactionHash: ', transactionHash)
     return { receipt, transactionHash, returnValue, transactionConfig };
   } catch (error) {
     const castedError = error as Error & { type?: string };
@@ -175,42 +177,24 @@ const sendTransactionWrapper = async (
   web3: Web3,
   transaction: ContractSendMethod,
   contractAddress: string | undefined
-) => {
-  const wrapperTxnConfig = configOption;
-  let sendViaKMS = false;
-
-  if (configOption.maxFeePerGas) {
-    wrapperTxnConfig.maxFeePerGas = parseInt(configOption.maxFeePerGas.toString()) * 2;
-  }
-
-  if (configOption.maxPriorityFeePerGas) {
-    wrapperTxnConfig.maxPriorityFeePerGas = configOption.maxPriorityFeePerGas;
-  }
-
-  if (configOption.gasPrice) {
-    wrapperTxnConfig.gasPrice = configOption.gasPrice;
-  }
-
-  if (process.env.KMS_SIGNER) {
-    wrapperTxnConfig.to = contractAddress;
-    sendViaKMS = true;
-  } else {
-    wrapperTxnConfig.type = "0x2";
-  }
+): Promise<TransactionReceipt> => {
+  const wrapperTxnConfig: AugmentedSendOptions = {
+    ...configOption,
+    to: process.env.KMS_SIGNER ? contractAddress : configOption.to,
+    // legacy: 0x0, eip-1559: 0x2
+    type: process.env.KMS_SIGNER ? "0x2" : "0x0" ,
+    maxFeePerGas: configOption.maxFeePerGas ? parseInt(configOption.maxFeePerGas.toString()) * 2 : undefined,
+    maxPriorityFeePerGas: configOption.maxPriorityFeePerGas,
+    gasPrice: configOption.gasPrice ,
+  };
 
   console.log("DEBUG: wrapperTxnConfig", wrapperTxnConfig);
-
-  let receipt;
-  // send transaction via KMS signer
-  if (sendViaKMS) {
-    receipt = await sendTxWithKMS(web3, transaction, wrapperTxnConfig);
-  }
-  // send transaction via traditional EOA account
-  else {
-    receipt = ((await transaction.send(wrapperTxnConfig as SendOptions)) as unknown) as TransactionReceipt;
+  if (process.env.KMS_SIGNER) {
+    return (await sendTxWithKMS(web3, transaction, wrapperTxnConfig) as unknown) as TransactionReceipt;
+  } else {
+    return ((await transaction.send(wrapperTxnConfig as SendOptions)) as unknown) as TransactionReceipt;
   }
 
-  return receipt as TransactionReceipt;
 };
 
 /**
@@ -259,7 +243,7 @@ export const getPendingTransactionCount = async (web3: Web3, account: string): P
 export const blockUntilBlockMined = async (web3: Web3, blockerBlockNumber: number, delay = 500): Promise<void> => {
   // If called from tests, exit early.
   if (argv._.indexOf("test") !== -1 || argv._.filter((arg) => arg.includes("mocha")).length > 0) return;
-  for (;;) {
+  for (; ;) {
     const currentBlockNumber = await web3.eth.getBlockNumber();
     if (currentBlockNumber >= blockerBlockNumber) break;
     await new Promise((r) => setTimeout(r, delay));

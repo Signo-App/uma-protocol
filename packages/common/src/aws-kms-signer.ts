@@ -3,6 +3,7 @@ import type { ContractSendMethod } from "web3-eth-contract";
 import type Web3 from "web3";
 import { _signDigest, AwsKmsSignerCredentials } from "./aws-kms-utils";
 import { AugmentedSendOptions } from "./TransactionUtils";
+import type { TransactionReceipt, PromiEvent } from "web3-core";
 
 const kmsCredentials: AwsKmsSignerCredentials = {
   accessKeyId: process.env.KMS_ACCESS_KEY_ID, // credentials for your IAM user with KMS access
@@ -22,7 +23,7 @@ export async function sendTxWithKMS(
 
   // EIP-1559 TX Type or Legacy depending on maxFeePerGas, maxPriorityFeePerGas and gasPrice
   const txParams: UnsignedTransaction = {
-    gasLimit: 350000,
+    gasLimit: transactionConfig.gas,
     // double the maxFeePerGas to ensure the transaction is included
     maxFeePerGas: transactionConfig.maxFeePerGas,
     maxPriorityFeePerGas: transactionConfig.maxPriorityFeePerGas,
@@ -31,7 +32,7 @@ export async function sendTxWithKMS(
     to: transactionConfig.to,
     value: transactionConfig.value || "0x00",
     data: encodedFunctionCall,
-    type: transactionConfig.gasPrice ? 1 : 2,
+    type: Number(transactionConfig.type),
     chainId: Number(transactionConfig.chainId),
   };
   console.log("TX Params: ", txParams);
