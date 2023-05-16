@@ -4,12 +4,15 @@ const {
   runTransaction,
   blockUntilBlockMined,
   createContractObjectFromJson,
+  sendTxWithKMS
+
 } = require("@uma/common");
 const { getAbi, getBytecode } = require("@uma/contracts-node");
 
 const UniswapV2Factory = require("@uniswap/v2-core/build/UniswapV2Factory.json");
 const IUniswapV2Pair = require("@uniswap/v2-core/build/IUniswapV2Pair.json");
-
+//yarn workspace @uma/common build    
+//yarn workspace @uma/financial-templates-lib build && node packages/liquidator/index.js --network goerli_mnemonic 
 class ProxyTransactionWrapper {
   /**
    * @notice Constructs new ProxyTransactionWrapper. This adds support DSProxy atomic liquidation support to the bots.
@@ -55,6 +58,12 @@ class ProxyTransactionWrapper {
     const defaultConfig = {
       useDsProxyToLiquidate: {
         value: false,
+        isValid: (x) => {
+          return typeof x == "boolean";
+        },
+      },
+      usesKMSToLiquidate: {
+        value: true,
         isValid: (x) => {
           return typeof x == "boolean";
         },
@@ -179,8 +188,47 @@ class ProxyTransactionWrapper {
   // If the bot is using a DSProxy then route the tx via it.
   async submitLiquidationTransaction(liquidationArgs) {
     // If the liquidator is not using a DSProxy, use the old method of liquidating
-    if (!this.useDsProxyToLiquidate) return await this._executeLiquidationWithoutDsProxy(liquidationArgs);
-    else return await this._executeLiquidationWithDsProxy(liquidationArgs);
+
+    if (this.useDsProxyToLiquidate) return await this._executeLiquidationWithDsProxy(liquidationArgs);
+    else if (this.usesKMSToLiquidate) return await this._executeLiquidationWitKMS(liquidationArgs);
+    else return await this._executeLiquidationWithoutDsProxy(liquidationArgs);
+  }
+  async _executeLiquidationWitKMS(liquidationArgs) {
+    // liquidation strategy will control how much to liquidate
+    const liquidation = this.financialContract.methods.createLiquidation(...liquidationArgs);
+
+    try {
+
+      console.log('trying to exec... liq....... with KMS....')
+      const { receipt, returnValue, transactionConfig } = await sendTxWithKMS(
+       this.web3,liquidation, { ...this.gasEstimator.getCurrentFastPrice(), from: process.env.KMS_SIGNER_ADDRESS, to: this.financialContract.options.address },
+      );
+
+      const liquidationEvent = (
+        await this.financialContract.getPastEvents("LiquidationCreated", {
+          fromBlock: receipt.blockNumber,
+          filter: { liquidator: process.env.KMS_SIGNER_ADDRESS },
+        })
+      )[0];
+      console.log('------------------------')
+      console.log('event fetched: ', liquidationEvent)
+      console.log('------------------------')
+      return {
+        type: "AWS KMS liquidation",
+        tx: receipt && receipt.transactionHash,
+        sponsor: liquidationEvent.returnValues.sponsor,
+        liquidator: liquidationEvent.returnValues.liquidator,
+        liquidationId: liquidationEvent.liquidationId,
+        tokensOutstanding: liquidationEvent.tokensOutstanding,
+        lockedCollateral: liquidationEvent.lockedCollateral,
+        liquidatedCollateral: liquidationEvent.liquidatedCollateral,
+        returnValue: returnValue.toString(),
+        transactionConfig,
+      };
+    } catch (error) {
+      console.log('error: ', error)
+      return error;
+    }
   }
 
   async _executeLiquidationWithoutDsProxy(liquidationArgs) {

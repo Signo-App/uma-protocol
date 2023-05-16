@@ -5,6 +5,9 @@ import { _signDigest, AwsKmsSignerCredentials } from "./aws-kms-utils";
 import { AugmentedSendOptions } from "./TransactionUtils";
 import type { TransactionReceipt, PromiEvent } from "web3-core";
 
+const GAS_LIMIT_BUFFER = 1.25;
+
+
 const kmsCredentials: AwsKmsSignerCredentials = {
   accessKeyId: process.env.KMS_ACCESS_KEY_ID, // credentials for your IAM user with KMS access
   secretAccessKey: process.env.KMS_ACCESS_SECRET_KEY, // credentials for your IAM user with KMS access
@@ -16,33 +19,55 @@ const kmsCredentials: AwsKmsSignerCredentials = {
 export async function sendTxWithKMS(
   _web3: Web3,
   transaction: ContractSendMethod,
-  transactionConfig: AugmentedSendOptions
+  transactionConfig: any
 ) {
   const web3 = _web3;
   const encodedFunctionCall = transaction.encodeABI();
+  console.log('+++++++++++++++++++++++++++++')
+  console.log('transactionConfig: ', transactionConfig)
+  console.log('+++++++++++++++++++++++++++++')
+
+  //get nonce
+  transactionConfig.nonce = await web3.eth.getTransactionCount(transactionConfig.from);
+
+  let returnValue, estimatedGas;
+  try {
+    [returnValue, estimatedGas] = await Promise.all([
+      transaction.call({ from: transactionConfig.from }),
+      transaction.estimateGas({ from: transactionConfig.from }),
+    ]);
+  } catch (error) {
+    const castedError = error as Error & { type?: string };
+    castedError.type = "call";
+    throw castedError;
+  }
+
 
   // EIP-1559 TX Type or Legacy depending on maxFeePerGas, maxPriorityFeePerGas and gasPrice
   const txParams: UnsignedTransaction = {
-    gasLimit: transactionConfig.gas,
+    gasLimit: Math.floor(estimatedGas * GAS_LIMIT_BUFFER),
     // double the maxFeePerGas to ensure the transaction is included
-    maxFeePerGas: transactionConfig.maxFeePerGas,
+    maxFeePerGas: parseInt(transactionConfig.maxFeePerGas.toString()) * 2,
     maxPriorityFeePerGas: transactionConfig.maxPriorityFeePerGas,
     gasPrice: transactionConfig.gasPrice,
     nonce: transactionConfig.nonce,
     to: transactionConfig.to,
     value: transactionConfig.value || "0x00",
     data: encodedFunctionCall,
-    type: Number(transactionConfig.type),
-    chainId: Number(transactionConfig.chainId),
+    type: 2,
+    chainId: 5,
   };
-  console.log("TX Params: ", txParams);
+  console.log('+++++++++++++++++++++++++++++')
+  console.log('tx Params: ', txParams)
+  console.log('+++++++++++++++++++++++++++++')
 
   const serializedUnsignedTx = ethers.utils.serializeTransaction(<UnsignedTransaction>txParams);
   const transactionSignature = await _signDigest(ethers.utils.keccak256(serializedUnsignedTx), kmsCredentials);
   const serializedTx = ethers.utils.serializeTransaction(<UnsignedTransaction>txParams, transactionSignature);
 
-  console.log("sending transaction ....");
-
   // Promi event => promise resolved on event receipt
-  return web3.eth.sendSignedTransaction(serializedTx);
+    const receipt = (await web3.eth.sendSignedTransaction(serializedTx) as unknown) as TransactionReceipt;
+   const transactionHash = receipt.transactionHash;
+
+   return { receipt, transactionHash, returnValue, transactionConfig }; 
 }

@@ -31,10 +31,10 @@ export const setAllowance = async (
   const currentCollateralAllowance = await collateralToken.methods.allowance(ownerAddress, spenderAddress).call();
   if (toBN(currentCollateralAllowance).lt(toBN(MAX_SAFE_ALLOWANCE))) {
     const approveTransaction = collateralToken.methods.approve(spenderAddress, MAX_UINT_VAL);
+    // TODO Support KMS
     const { receipt } = await runTransaction({
       web3,
       transaction: (approveTransaction as unknown) as ContractSendMethod,
-      contractAddress: collateralToken.options.address,
       // TODO save the signer address in somewhere
       transactionConfig: { ...gasEstimator.getCurrentFastPrice(), from: process.env.KMS_SIGNER_ADDRESS!},
     });

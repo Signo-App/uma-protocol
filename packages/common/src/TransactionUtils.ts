@@ -5,12 +5,10 @@ import winston from "winston";
 import type Web3 from "web3";
 import type { TransactionReceipt, PromiEvent } from "web3-core";
 import type { ContractSendMethod, SendOptions } from "web3-eth-contract";
-import { sendTxWithKMS } from "./aws-kms-signer";
 
 type CallReturnValue = ReturnType<ContractSendMethod["call"]>;
 export interface AugmentedSendOptions {
   from: string;
-  to?: string;
   gas?: number;
   value?: number | string;
   nonce?: number;
@@ -56,13 +54,11 @@ export const runTransaction = async ({
   transaction,
   transactionConfig,
   availableAccounts = 1,
-  contractAddress,
   waitForMine = true,
 }: {
   web3: Web3;
   transaction: ContractSendMethod;
   transactionConfig: AugmentedSendOptions;
-  contractAddress?: string;
   availableAccounts?: number;
   waitForMine?: boolean;
 }): Promise<ExecutedTransaction> => {
@@ -137,19 +133,21 @@ export const runTransaction = async ({
     if (transactionConfig.maxFeePerGas && transactionConfig.maxPriorityFeePerGas) {
       // If waitForMine is set (default) then code blocks until the transaction is mined and a receipt is returned.
       if (waitForMine) {
-        console.log('waiting for mine...')
-        receipt = await sendTransactionWrapper(transactionConfig, web3, transaction, contractAddress);
+        receipt = ((await transaction.send({
+          ...transactionConfig,
+          maxFeePerGas: parseInt(transactionConfig.maxFeePerGas.toString()) * 2,
+          type: "0x2",
+        } as SendOptions)) as unknown) as TransactionReceipt;
         transactionHash = receipt.transactionHash;
       }
       // Else, waitForMine is false and we return the transaction hash immediately as soon as it is included in the
       // mempool. Receipt is a promise of the pending transaction that can be awaited later to ensure block inclusion.
       else {
-        receipt = sendTransactionWrapper(
-          transactionConfig,
-          web3,
-          transaction,
-          contractAddress!
-        ) as PromiEvent<TransactionReceipt>;
+        receipt = (transaction.send({
+          ...transactionConfig,
+          maxFeePerGas: parseInt(transactionConfig.maxFeePerGas.toString()) * 2,
+          type: "0x2",
+        } as SendOptions) as unknown) as PromiEvent<TransactionReceipt>;
         transactionHash = await new Promise((resolve, reject) => {
           const _receipt = receipt as PromiEvent<TransactionReceipt>;
           _receipt.on("transactionHash", (transactionHash) => resolve(transactionHash));
@@ -159,42 +157,19 @@ export const runTransaction = async ({
 
       // Else this is a legacy tx.
     } else if (transactionConfig.gasPrice) {
-      receipt = await sendTransactionWrapper(transactionConfig, web3, transaction, contractAddress);
+      receipt = ((await transaction.send({
+        ...transactionConfig,
+        gasPrice: transactionConfig.gasPrice.toString(),
+      })) as unknown) as TransactionReceipt;
       transactionHash = receipt.transactionHash;
     } else throw new Error("No gas information provided");
-    console.log('receipt: ', receipt)
-    console.log('transactionHash: ', transactionHash)
+
     return { receipt, transactionHash, returnValue, transactionConfig };
   } catch (error) {
     const castedError = error as Error & { type?: string };
     castedError.type = "send";
     throw castedError;
   }
-};
-
-const sendTransactionWrapper = async (
-  configOption: AugmentedSendOptions,
-  web3: Web3,
-  transaction: ContractSendMethod,
-  contractAddress: string | undefined
-): Promise<TransactionReceipt> => {
-  const wrapperTxnConfig: AugmentedSendOptions = {
-    ...configOption,
-    to: process.env.KMS_SIGNER ? contractAddress : configOption.to,
-    // legacy: 0x0, eip-1559: 0x2
-    type: process.env.KMS_SIGNER ? "0x2" : "0x0" ,
-    maxFeePerGas: configOption.maxFeePerGas ? parseInt(configOption.maxFeePerGas.toString()) * 2 : undefined,
-    maxPriorityFeePerGas: configOption.maxPriorityFeePerGas,
-    gasPrice: configOption.gasPrice ,
-  };
-
-  console.log("DEBUG: wrapperTxnConfig", wrapperTxnConfig);
-  if (process.env.KMS_SIGNER) {
-    return (await sendTxWithKMS(web3, transaction, wrapperTxnConfig) as unknown) as TransactionReceipt;
-  } else {
-    return ((await transaction.send(wrapperTxnConfig as SendOptions)) as unknown) as TransactionReceipt;
-  }
-
 };
 
 /**
@@ -243,7 +218,7 @@ export const getPendingTransactionCount = async (web3: Web3, account: string): P
 export const blockUntilBlockMined = async (web3: Web3, blockerBlockNumber: number, delay = 500): Promise<void> => {
   // If called from tests, exit early.
   if (argv._.indexOf("test") !== -1 || argv._.filter((arg) => arg.includes("mocha")).length > 0) return;
-  for (; ;) {
+  for (;;) {
     const currentBlockNumber = await web3.eth.getBlockNumber();
     if (currentBlockNumber >= blockerBlockNumber) break;
     await new Promise((r) => setTimeout(r, delay));

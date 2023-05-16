@@ -202,10 +202,10 @@ class Liquidator {
       liquidatorOverridePrice,
     });
     // If an override is provided, use that price. Else, get the latest price from the price feed.
-    const price = liquidatorOverridePrice
+/*     const price = liquidatorOverridePrice
       ? this.toBN(liquidatorOverridePrice.toString())
-      : this.priceFeed.getCurrentPrice();
-    //const price = this.toBN("209600000000000000000")
+      : this.priceFeed.getCurrentPrice(); */
+    const price = this.toBN("209600000000000000000")
     if (!price) {
       throw new Error("Cannot liquidate: price feed returned invalid value");
     }
@@ -339,7 +339,7 @@ class Liquidator {
         });
     }
   }
-
+    // TODO Support KMS
   // Queries ongoing liquidations and attempts to withdraw rewards from both expired and disputed liquidations.
   async withdrawRewards() {
     this.logger.debug({
