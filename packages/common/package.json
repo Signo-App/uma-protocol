@@ -43,6 +43,7 @@
     "@umaprotocol/truffle-ledger-provider": "^1.0.5",
     "@uniswap/v3-core": "^1.0.0-rc.2",
     "abi-decoder": "github:UMAprotocol/abi-decoder",
+    "aws-sdk": "^2.1379.0",
     "bignumber.js": "^8.0.1",
     "chalk-pipe": "^3.0.0",
     "decimal.js": "^10.2.1",
