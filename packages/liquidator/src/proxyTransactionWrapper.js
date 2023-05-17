@@ -4,6 +4,7 @@ const {
   runTransaction,
   blockUntilBlockMined,
   createContractObjectFromJson,
+  sendTxWithKMS
 } = require("@uma/common");
 const { getAbi, getBytecode } = require("@uma/contracts-node");
 
@@ -55,6 +56,12 @@ class ProxyTransactionWrapper {
     const defaultConfig = {
       useDsProxyToLiquidate: {
         value: false,
+        isValid: (x) => {
+          return typeof x == "boolean";
+        },
+      },
+      useKMSToLiquidate: {
+        value: true,
         isValid: (x) => {
           return typeof x == "boolean";
         },
@@ -178,9 +185,46 @@ class ProxyTransactionWrapper {
   // Main entry point for submitting a liquidation. If the bot is not using a DSProxy then simply send a normal EOA tx.
   // If the bot is using a DSProxy then route the tx via it.
   async submitLiquidationTransaction(liquidationArgs) {
-    // If the liquidator is not using a DSProxy, use the old method of liquidating
-    if (!this.useDsProxyToLiquidate) return await this._executeLiquidationWithoutDsProxy(liquidationArgs);
-    else return await this._executeLiquidationWithDsProxy(liquidationArgs);
+    // If the liquidator is not using a DSProxy or KMS Signer, use the old method of liquidating
+    if (this.useDsProxyToLiquidate) return await this._executeLiquidationWithDsProxy(liquidationArgs);
+    else if (this.useKMSToLiquidate) return await this._executeLiquidationWithKMS(liquidationArgs);
+    else return await this._executeLiquidationWithoutDsProxy(liquidationArgs);
+  }
+  async _executeLiquidationWithKMS(liquidationArgs) {
+    // liquidation strategy will control how much to liquidate
+    const liquidation = this.financialContract.methods.createLiquidation(...liquidationArgs);
+
+    try {
+      const { receipt, returnValue, transactionConfig } = await sendTxWithKMS(
+        this.web3, liquidation, { ...this.gasEstimator.getCurrentFastPrice(), from: process.env.KMS_SIGNER_ADDRESS, to: this.financialContract.options.address },
+      );
+
+      // Wait exactly one block to fetch events. This ensures that the events have been indexed by your node.
+      await blockUntilBlockMined(this.web3, receipt.blockNumber + 1);
+
+      const LiquidationEvent = (
+        await this.financialContract.getPastEvents("LiquidationCreated", {
+          fromBlock: receipt.blockNumber,
+          filter: { liquidator: process.env.KMS_SIGNER_ADDRESS },
+        })
+      )[0];
+
+      return {
+        type: "KMS Liquidation",
+        tx: receipt && receipt.transactionHash,
+        sponsor: LiquidationEvent.returnValues.sponsor,
+        liquidator: LiquidationEvent.returnValues.liquidator,
+        liquidationId: LiquidationEvent.liquidationId,
+        tokensOutstanding: LiquidationEvent.tokensOutstanding,
+        lockedCollateral: LiquidationEvent.lockedCollateral,
+        liquidatedCollateral: LiquidationEvent.liquidatedCollateral,
+        returnValue: returnValue.toString(),
+        transactionConfig,
+      };
+    } catch (error) {
+      console.log('KMS liquidation error: ', error)
+      return error;
+    }
   }
 
   async _executeLiquidationWithoutDsProxy(liquidationArgs) {

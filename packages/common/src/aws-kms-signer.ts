@@ -2,8 +2,7 @@ import { ethers, UnsignedTransaction } from "ethers";
 import type { ContractSendMethod } from "web3-eth-contract";
 import type Web3 from "web3";
 import { _signDigest, AwsKmsSignerCredentials } from "./aws-kms-utils";
-import { AugmentedSendOptions } from "./TransactionUtils";
-import type { TransactionReceipt, PromiEvent } from "web3-core";
+import type { TransactionReceipt } from "web3-core";
 
 const GAS_LIMIT_BUFFER = 1.25;
 
@@ -23,9 +22,6 @@ export async function sendTxWithKMS(
 ) {
   const web3 = _web3;
   const encodedFunctionCall = transaction.encodeABI();
-  console.log('+++++++++++++++++++++++++++++')
-  console.log('transactionConfig: ', transactionConfig)
-  console.log('+++++++++++++++++++++++++++++')
 
   //get nonce
   transactionConfig.nonce = await web3.eth.getTransactionCount(transactionConfig.from);
@@ -57,17 +53,14 @@ export async function sendTxWithKMS(
     type: 2,
     chainId: 5,
   };
-  console.log('+++++++++++++++++++++++++++++')
-  console.log('tx Params: ', txParams)
-  console.log('+++++++++++++++++++++++++++++')
 
   const serializedUnsignedTx = ethers.utils.serializeTransaction(<UnsignedTransaction>txParams);
   const transactionSignature = await _signDigest(ethers.utils.keccak256(serializedUnsignedTx), kmsCredentials);
   const serializedTx = ethers.utils.serializeTransaction(<UnsignedTransaction>txParams, transactionSignature);
 
   // Promi event => promise resolved on event receipt
-    const receipt = (await web3.eth.sendSignedTransaction(serializedTx) as unknown) as TransactionReceipt;
-   const transactionHash = receipt.transactionHash;
+  const receipt = (await web3.eth.sendSignedTransaction(serializedTx) as unknown) as TransactionReceipt;
+  const transactionHash = receipt.transactionHash;
 
-   return { receipt, transactionHash, returnValue, transactionConfig }; 
+  return { receipt, transactionHash, returnValue, transactionConfig };
 }

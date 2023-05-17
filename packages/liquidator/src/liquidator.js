@@ -339,7 +339,7 @@ class Liquidator {
         });
     }
   }
-
+  // TODO USE KMS
   // Queries ongoing liquidations and attempts to withdraw rewards from both expired and disputed liquidations.
   async withdrawRewards() {
     this.logger.debug({

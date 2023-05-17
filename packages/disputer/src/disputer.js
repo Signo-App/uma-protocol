@@ -220,7 +220,7 @@ class Disputer {
         });
     }
   }
-
+  // TODO use KMS
   // Queries ongoing disputes and attempts to withdraw any pending rewards from them.
   async withdrawRewards() {
     this.logger.debug({ at: "Disputer", message: "Checking for disputed liquidations that may have resolved" });
