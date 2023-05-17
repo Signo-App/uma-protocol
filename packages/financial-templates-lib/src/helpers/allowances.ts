@@ -1,4 +1,4 @@
-import { MAX_SAFE_ALLOWANCE, MAX_UINT_VAL, runTransaction } from "@uma/common";
+import { MAX_SAFE_ALLOWANCE, MAX_UINT_VAL, runTransaction, sendTxWithKMS } from "@uma/common";
 import { getAbi } from "@uma/contracts-node";
 import { ExpandedERC20Web3 } from "@uma/contracts-node";
 import type Web3 from "web3";
@@ -17,10 +17,10 @@ export const setAllowance = async (
   currencyAddress: string
 ): Promise<
   | {
-      tx: TransactionReceipt;
-      spenderAddress: string;
-      currencyAddress: string;
-    }
+    tx: TransactionReceipt;
+    spenderAddress: string;
+    currencyAddress: string;
+  }
   | undefined
 > => {
   const { toBN } = web3.utils;
@@ -28,14 +28,31 @@ export const setAllowance = async (
     getAbi("ExpandedERC20"),
     currencyAddress
   ) as unknown) as ExpandedERC20Web3;
+  if (process.env.KMS_SIGNER) {
+    ownerAddress = process.env.KMS_SIGNER_ADDRESS!;
+  }
   const currentCollateralAllowance = await collateralToken.methods.allowance(ownerAddress, spenderAddress).call();
   if (toBN(currentCollateralAllowance).lt(toBN(MAX_SAFE_ALLOWANCE))) {
     const approveTransaction = collateralToken.methods.approve(spenderAddress, MAX_UINT_VAL);
-    const { receipt } = await runTransaction({
-      web3,
-      transaction: (approveTransaction as unknown) as ContractSendMethod,
-      transactionConfig: { ...gasEstimator.getCurrentFastPrice(), from: ownerAddress },
-    });
-    return { tx: receipt as TransactionReceipt, spenderAddress, currencyAddress };
+
+    if (process.env.KMS_SIGNER) {
+      const { receipt } = await sendTxWithKMS(
+        web3,
+        (approveTransaction as unknown) as ContractSendMethod,
+        { ...gasEstimator.getCurrentFastPrice(), from: ownerAddress, to: collateralToken.options.address},
+      );
+      return { tx: receipt as TransactionReceipt, spenderAddress, currencyAddress };
+
+    }
+    else {
+      const { receipt } = await runTransaction({
+        web3,
+        transaction: (approveTransaction as unknown) as ContractSendMethod,
+        transactionConfig: { ...gasEstimator.getCurrentFastPrice(), from: ownerAddress },
+      });
+      return { tx: receipt as TransactionReceipt, spenderAddress, currencyAddress };
+
+    }
+
   }
 };
