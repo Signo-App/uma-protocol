@@ -3,7 +3,7 @@ import type { ContractSendMethod } from "web3-eth-contract";
 import type Web3 from "web3";
 import { _signDigest, AwsKmsSignerCredentials } from "./aws-kms-utils";
 import type { TransactionReceipt } from "web3-core";
-
+import { accountHasPendingTransactions, getPendingTransactionCount } from "./TransactionUtils";
 const GAS_LIMIT_BUFFER = 1.25;
 
 
@@ -23,8 +23,15 @@ export async function sendTxWithKMS(
   const web3 = _web3;
   const encodedFunctionCall = transaction.encodeABI();
 
-  //get nonce
-  transactionConfig.nonce = await web3.eth.getTransactionCount(transactionConfig.from);
+  // Compute the selected account nonce. If the account has a pending transaction then use the subsequent index after the
+  // pending transactions to ensure this new transaction does not collide with any existing transactions in the mempool.
+  if (await accountHasPendingTransactions(web3, transactionConfig.from)) {
+    transactionConfig.nonce = await getPendingTransactionCount(web3, transactionConfig.from);
+  }
+  // Else, there is no pending transaction and we use the current account transaction count as the nonce.
+  else {
+    transactionConfig.nonce = await web3.eth.getTransactionCount(transactionConfig.from);
+  }
 
   let returnValue, estimatedGas;
   try {
