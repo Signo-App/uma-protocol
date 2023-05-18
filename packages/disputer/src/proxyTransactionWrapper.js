@@ -1,6 +1,12 @@
 const assert = require("assert");
 
-const { createObjectFromDefaultProps, runTransaction, blockUntilBlockMined, MAX_UINT_VAL, sendTxWithKMS } = require("@uma/common");
+const {
+  createObjectFromDefaultProps,
+  runTransaction,
+  blockUntilBlockMined,
+  MAX_UINT_VAL,
+  sendTxWithKMS,
+} = require("@uma/common");
 const { getAbi, getBytecode } = require("@uma/contracts-node");
 
 class ProxyTransactionWrapper {
@@ -48,7 +54,7 @@ class ProxyTransactionWrapper {
         },
       },
       useKMSToDispute: {
-        value: true,
+        value: process.env.KMS_SIGNER ? true : false,
         isValid: (x) => {
           return typeof x == "boolean";
         },
@@ -112,9 +118,11 @@ class ProxyTransactionWrapper {
     // Send the transaction or report failure.
     try {
       // Get successful transaction receipt and return value or error.
-      const { receipt, returnValue, transactionConfig } = await sendTxWithKMS(
-        this.web3, dispute, { ...this.gasEstimator.getCurrentFastPrice(), from: process.env.KMS_SIGNER_ADDRESS, to: this.financialContract.options.address },
-      );
+      const { receipt, returnValue, transactionConfig } = await sendTxWithKMS(this.web3, dispute, {
+        ...this.gasEstimator.getCurrentFastPrice(),
+        from: process.env.KMS_SIGNER_ADDRESS,
+        to: this.financialContract.options.address,
+      });
       const DisputeEvent = (
         await this.financialContract.getPastEvents("LiquidationDisputed", {
           fromBlock: receipt.blockNumber,
@@ -135,7 +143,7 @@ class ProxyTransactionWrapper {
         transactionConfig,
       };
     } catch (error) {
-      console.log('KMS dispute error: ', error)
+      console.log("KMS dispute error: ", error);
       return error;
     }
   }

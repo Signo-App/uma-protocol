@@ -4,7 +4,7 @@ const {
   runTransaction,
   blockUntilBlockMined,
   createContractObjectFromJson,
-  sendTxWithKMS
+  sendTxWithKMS,
 } = require("@uma/common");
 const { getAbi, getBytecode } = require("@uma/contracts-node");
 
@@ -61,7 +61,7 @@ class ProxyTransactionWrapper {
         },
       },
       useKMSToLiquidate: {
-        value: true,
+        value: process.env.KMS_SIGNER ? true : false,
         isValid: (x) => {
           return typeof x == "boolean";
         },
@@ -195,9 +195,11 @@ class ProxyTransactionWrapper {
     const liquidation = this.financialContract.methods.createLiquidation(...liquidationArgs);
 
     try {
-      const { receipt, returnValue, transactionConfig } = await sendTxWithKMS(
-        this.web3, liquidation, { ...this.gasEstimator.getCurrentFastPrice(), from: process.env.KMS_SIGNER_ADDRESS, to: this.financialContract.options.address },
-      );
+      const { receipt, returnValue, transactionConfig } = await sendTxWithKMS(this.web3, liquidation, {
+        ...this.gasEstimator.getCurrentFastPrice(),
+        from: process.env.KMS_SIGNER_ADDRESS,
+        to: this.financialContract.options.address,
+      });
 
       // Wait exactly one block to fetch events. This ensures that the events have been indexed by your node.
       await blockUntilBlockMined(this.web3, receipt.blockNumber + 1);
@@ -222,7 +224,7 @@ class ProxyTransactionWrapper {
         transactionConfig,
       };
     } catch (error) {
-      console.log('KMS liquidation error: ', error)
+      console.log("KMS liquidation error: ", error);
       return error;
     }
   }
