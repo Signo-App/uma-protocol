@@ -155,6 +155,46 @@ async function run({
       }
     };
 
+    // Checks whether the liquidator bot wallet balance is >= total open positions * minimum sponsor amount
+    const calculateBotWalletBalance = async () => {
+      // update client state
+      this.client = financialContractClient;
+      this.web3 = this.client.web3;
+
+      await this.client.update();
+
+      const minSponsorTokens =
+        liquidatorConfig.contractType === "ExpiringMultiParty"
+          ? await financialContract.methods.minSponsorTokens().call()
+          : Promise.resolve(null); // Replace this with your default value or logic
+
+      const numOfOpenPositions = this.client.getAllPositions().length;
+
+      console.log(`minSponsorTokens: ${minSponsorTokens}`);
+      console.log(`Amount of openPositions: ${numOfOpenPositions}`);
+
+      let targetWalletBalance = minSponsorTokens.multipliedBy(numOfOpenPositions); // Assuming minSponsorTokens is a big number
+      console.log(`Bot wallet balance should be: ${targetWalletBalance.toString()}`);
+
+      // fetches the current synth balance of the bot wallet
+      const currentBotWalletBalance = await this.syntheticToken.methods.balanceOf(this.account).call();
+      console.log(`Current bot wallet balance is: ${currentBotWalletBalance}`);
+
+      if (currentBotWalletBalance.islessthan(targetWalletBalance)) {
+        logger.warn({
+          at: "Liquidator#index",
+          message: `Bot wallet balance is ${currentBotWalletBalance.toString()} which is less than the target wallet balance threshold of ${targetWalletBalance.toString()}. Replenish bot wallet balance immediately`,
+        });
+        return true;
+      } else {
+        logger.info({
+          at: "Liquidator#index",
+          message: `Current bot wallet balance of ${currentBotWalletBalance.toString()} meets the target wallet balance threshold of ${targetWalletBalance.toString()}. Bot wallet balance is within the healthy range.`,
+        });
+        return false;
+      }
+    };
+
     // Generate Financial Contract properties to inform bot of important on-chain state values that we only want to query once.
     const [
       collateralRequirement,
@@ -310,6 +350,9 @@ async function run({
 
       await retry(
         async () => {
+          // Checks if bot wallet balance is above the healthy balance threshold (minSponsorAmount * number of open positions)
+          await calculateBotWalletBalance();
+
           // Update the liquidators state. This will update the clients, price feeds and gas estimator.
           await liquidator.update();
           if (!isExpiredOrShutdown) {
