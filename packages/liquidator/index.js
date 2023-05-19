@@ -157,41 +157,52 @@ async function run({
 
     // Checks whether the liquidator bot wallet balance is >= total open positions * minimum sponsor amount
     const calculateBotWalletBalance = async () => {
-      // update client state
-      this.client = financialContractClient;
-      this.web3 = this.client.web3;
+      try {
+        // update client state
+        this.client = financialContractClient;
+        this.web3 = this.client.web3;
+        this.syntheticToken = syntheticToken;
 
-      await this.client.update();
+        await this.client.update();
 
-      const minSponsorTokens =
-        liquidatorConfig.contractType === "ExpiringMultiParty"
-          ? await financialContract.methods.minSponsorTokens().call()
-          : Promise.resolve(null); // Replace this with your default value or logic
+        let minSponsorTokens = null;
+        if (liquidatorConfig.contractType === "ExpiringMultiParty") {
+          minSponsorTokens = await financialContract.methods.minSponsorTokens().call();
+        }
 
-      const numOfOpenPositions = this.client.getAllPositions().length;
+        const numOfOpenPositions = this.client.getAllPositions().length;
 
-      console.log(`minSponsorTokens: ${minSponsorTokens}`);
-      console.log(`Amount of openPositions: ${numOfOpenPositions}`);
+        console.log(`minSponsorTokens: ${minSponsorTokens}`);
+        console.log(`Amount of openPositions: ${numOfOpenPositions}`);
 
-      let targetWalletBalance = minSponsorTokens.multipliedBy(numOfOpenPositions); // Assuming minSponsorTokens is a big number
-      console.log(`Bot wallet balance should be: ${targetWalletBalance.toString()}`);
+        let targetWalletBalance = minSponsorTokens * numOfOpenPositions; // Assuming minSponsorTokens is a big number
+        console.log(`Bot wallet balance should be >= : ${targetWalletBalance.toString()}`);
 
-      // fetches the current synth balance of the bot wallet
-      const currentBotWalletBalance = await this.syntheticToken.methods.balanceOf(this.account).call();
-      console.log(`Current bot wallet balance is: ${currentBotWalletBalance}`);
+        // fetches the current synth balance from the liquidator bot wallet
+        const currentBotWalletBalance = await proxyTransactionWrapper.getEffectiveSyntheticTokenBalance();
+        console.log(`Current bot wallet balance is: ${currentBotWalletBalance}`);
 
-      if (currentBotWalletBalance.islessthan(targetWalletBalance)) {
-        logger.warn({
+        if (currentBotWalletBalance < targetWalletBalance) {
+          logger.warn({
+            at: "Liquidator#index",
+            message: `Bot wallet balance is ${currentBotWalletBalance.toString()} which is below the target wallet balance threshold of ${targetWalletBalance.toString()}. Replenish bot wallet balance immediately`,
+          });
+          return true;
+        } else {
+          logger.info({
+            at: "Liquidator#index",
+            message: `Current bot wallet balance of ${currentBotWalletBalance.toString()} meets the target wallet balance threshold of ${targetWalletBalance.toString()}. Bot wallet balance is within the healthy range.`,
+          });
+          return false;
+        }
+      } catch (error) {
+        logger.error({
           at: "Liquidator#index",
-          message: `Bot wallet balance is ${currentBotWalletBalance.toString()} which is less than the target wallet balance threshold of ${targetWalletBalance.toString()}. Replenish bot wallet balance immediately`,
+          message: "An error occurred during the calculation of the bot wallet balance",
+          error: error,
         });
-        return true;
-      } else {
-        logger.info({
-          at: "Liquidator#index",
-          message: `Current bot wallet balance of ${currentBotWalletBalance.toString()} meets the target wallet balance threshold of ${targetWalletBalance.toString()}. Bot wallet balance is within the healthy range.`,
-        });
-        return false;
+
+        throw error;
       }
     };
 
