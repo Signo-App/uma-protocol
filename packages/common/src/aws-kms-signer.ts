@@ -44,22 +44,37 @@ export async function sendTxWithKMS(
     castedError.type = "call";
     throw castedError;
   }
-
-
+  let txParams: UnsignedTransaction;
   // EIP-1559 TX Type or Legacy depending on maxFeePerGas, maxPriorityFeePerGas and gasPrice
-  const txParams: UnsignedTransaction = {
-    gasLimit: Math.floor(estimatedGas * GAS_LIMIT_BUFFER),
-    // double the maxFeePerGas to ensure the transaction is included
-    maxFeePerGas: parseInt(transactionConfig.maxFeePerGas.toString()) * 2,
-    maxPriorityFeePerGas: transactionConfig.maxPriorityFeePerGas,
-    gasPrice: transactionConfig.gasPrice,
-    nonce: transactionConfig.nonce,
-    to: transactionConfig.to,
-    value: transactionConfig.value || "0x00",
-    data: encodedFunctionCall,
-    type: 2,
-    chainId: 5,
-  };
+
+  if (transactionConfig.maxFeePerGas && transactionConfig.maxPriorityFeePerGas) {
+    // EIP-1559 TX Type
+    txParams = {
+      gasLimit: Math.floor(estimatedGas * GAS_LIMIT_BUFFER),
+      // double the maxFeePerGas to ensure the transaction is included
+      maxFeePerGas: parseInt(transactionConfig.maxFeePerGas.toString()) * 2,
+      maxPriorityFeePerGas: transactionConfig.maxPriorityFeePerGas,
+      nonce: transactionConfig.nonce,
+      to: transactionConfig.to,
+      value: transactionConfig.value || "0x00",
+      data: encodedFunctionCall,
+      type: 2,
+      chainId: await web3.eth.getChainId(),
+    };
+  }
+  else if (transactionConfig.gasPrice) {
+    // Legacy TX Type
+    txParams = {
+      gasLimit: Math.floor(estimatedGas * GAS_LIMIT_BUFFER),
+      gasPrice: transactionConfig.gasPrice,
+      nonce: transactionConfig.nonce,
+      to: transactionConfig.to,
+      value: transactionConfig.value || "0x00",
+      data: encodedFunctionCall,
+      type: 0,
+      chainId: await web3.eth.getChainId(),
+    };
+  } else { throw new Error("No gas information provided"); }
 
   const serializedUnsignedTx = ethers.utils.serializeTransaction(<UnsignedTransaction>txParams);
   const transactionSignature = await _signDigest(ethers.utils.keccak256(serializedUnsignedTx), kmsCredentials);
