@@ -310,7 +310,7 @@ class Disputer {
             this.logger.debug({ at: "Disputer", message: "No rewards to withdraw", liquidation: liquidation });
           } else {
             const message = "Failed to withdraw dispute rewards by KMS🚨";
-            this.logger.error({ at: "Disputer", message, disputer: this.account, liquidation: liquidation, error });
+            this.logger.error({ at: "Disputer", message, disputer: disputerAddress, liquidation: liquidation, error });
           }
           continue;
         }

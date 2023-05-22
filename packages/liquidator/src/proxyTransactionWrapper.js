@@ -117,11 +117,13 @@ class ProxyTransactionWrapper {
     };
   }
 
-  // Get the effective synthetic token balance. If the bot is executing in normal mode (liquidations sent from an EOA)
-  // then this is simply the token balance of the unlocked account. If the liquidator is using a DSProxy to liquidate,
+  // Get the effective synthetic token balance. If the bot is executing in normal mode (liquidations sent from an EOA or KMS Signer)
+  // then this is simply the token balance of the unlocked account or KMS Signer. If the liquidator is using a DSProxy to liquidate,
   // then consider the synthetics could be minted, + any synthetics the DSProxy already has.
   async getEffectiveSyntheticTokenBalance() {
-    const syntheticTokenBalance = await this.syntheticToken.methods.balanceOf(this.account).call();
+    let account = process.env.KMS_SIGNER ? process.env.KMS_SIGNER_ADDRESS : this.account;
+
+    const syntheticTokenBalance = await this.syntheticToken.methods.balanceOf(account).call();
     // If using the DSProxy to liquidate then return the current synthetic token balance.
     if (!this.useDsProxyToLiquidate) return syntheticTokenBalance;
     else {

@@ -262,10 +262,8 @@ class Liquidator {
       });
 
       if (
-        position.sponsor ==
-        (this.proxyTransactionWrapper.useDsProxyToLiquidate
-          ? this.proxyTransactionWrapper.dsProxyManager.getDSProxyAddress()
-          : this.account)
+        position.sponsor == (this.proxyTransactionWrapper.useDsProxyToLiquidate ? this.proxyTransactionWrapper.dsProxyManager.getDSProxyAddress()
+          : process.env.KMS_SIGNER ? process.env.KMS_SIGNER_ADDRESS : this.account)
       ) {
         this.logger.warn({
           at: "Liquidator",
@@ -414,7 +412,7 @@ class Liquidator {
         try {
           const { receipt, transactionConfig } = await sendTxWithKMS(
             this.web3, withdraw,
-            { ...this.gasEstimator.getCurrentFastPrice(), from: process.env.KMS_SIGNER_ADDRESS , to:this.financialContract.options.address},
+            { ...this.gasEstimator.getCurrentFastPrice(), from: process.env.KMS_SIGNER_ADDRESS, to: this.financialContract.options.address },
           );
           await blockUntilBlockMined(this.web3, receipt.blockNumber + 1);
 
