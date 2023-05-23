@@ -2,6 +2,8 @@ const {
   PostWithdrawLiquidationRewardsStatusTranslations,
   createObjectFromDefaultProps,
   runTransaction,
+  sendTxWithKMS,
+  blockUntilBlockMined
 } = require("@uma/common");
 
 class Disputer {
@@ -220,16 +222,19 @@ class Disputer {
         });
     }
   }
-
   // Queries ongoing disputes and attempts to withdraw any pending rewards from them.
   async withdrawRewards() {
     this.logger.debug({ at: "Disputer", message: "Checking for disputed liquidations that may have resolved" });
 
-    // The disputer address is either the DSProxy (if using a DSProxy to dispute) or the unlocked account.
-    const disputerAddress = this.proxyTransactionWrapper.useDsProxyToDispute
-      ? this.proxyTransactionWrapper.dsProxyManager.getDSProxyAddress()
-      : this.account;
-
+    // The disputer address is the DSProxy (if using a DSProxy to dispute), KMS SIGNER(if using a KMS to dispute) or the unlocked account.
+    let disputerAddress;
+    if (this.proxyTransactionWrapper.useDsProxyToDispute) {
+      disputerAddress = this.proxyTransactionWrapper.dsProxyManager.getDSProxyAddress();
+    } else if (process.env.KMS_SIGNER) {
+      disputerAddress = process.env.KMS_SIGNER_ADDRESS;
+    } else {
+      disputerAddress = this.account;
+    }
     // Can only derive rewards from disputed liquidations that this account disputed.
     let disputedLiquidations = this.financialContractClient.getDisputedLiquidations();
 
@@ -259,45 +264,99 @@ class Disputer {
       const withdraw = this.financialContract.methods.withdrawLiquidation(liquidation.id, liquidation.sponsor);
 
       this.logger.debug({ at: "Disputer", message: "Withdrawing dispute", liquidation: liquidation });
-      try {
-        // Get successful transaction receipt and return value or error.
-        const { receipt, transactionConfig } = await runTransaction({
-          web3: this.web3,
-          transaction: withdraw,
-          transactionConfig: { ...this.gasEstimator.getCurrentFastPrice(), from: this.account },
-        });
-        let logResult = {
-          tx: receipt.transactionHash,
-          caller: receipt.events.LiquidationWithdrawn.returnValues.caller,
-          settlementPrice: receipt.events.LiquidationWithdrawn.returnValues.settlementPrice,
-          liquidationStatus:
-            PostWithdrawLiquidationRewardsStatusTranslations[
-              receipt.events.LiquidationWithdrawn.returnValues.liquidationStatus
-            ],
-        };
+      // USE KMS to Withdraw
+      if (process.env.KMS_SIGNER) {
+        try {
+          // Get successful transaction receipt and return value or error.
+          const { receipt, transactionConfig } = await sendTxWithKMS(
+            this.web3, withdraw,
+            { ...this.gasEstimator.getCurrentFastPrice(), from: process.env.KMS_SIGNER_ADDRESS , to:this.financialContract.options.address},
+          );
+          // Wait exactly one block to fetch events. This ensures that the events have been indexed by your node.
+          await blockUntilBlockMined(this.web3, receipt.blockNumber + 1);
 
-        // Returns an object containing all payouts.
-        logResult.paidToLiquidator = receipt.events.LiquidationWithdrawn.returnValues.paidToLiquidator;
-        logResult.paidToDisputer = receipt.events.LiquidationWithdrawn.returnValues.paidToDisputer;
-        logResult.paidToSponsor = receipt.events.LiquidationWithdrawn.returnValues.paidToSponsor;
+          const LiquidationWithdrawnEvent = (
+            await this.financialContract.getPastEvents("LiquidationWithdrawn", {
+              fromBlock: receipt.blockNumber,
+              filter: { caller: process.env.KMS_SIGNER_ADDRESS },
+            })
+          )[0];
+          let logResult = {
+            tx: receipt.transactionHash,
+            caller: LiquidationWithdrawnEvent.returnValues.caller,
+            settlementPrice: LiquidationWithdrawnEvent.returnValues.settlementPrice,
+            liquidationStatus:
+              PostWithdrawLiquidationRewardsStatusTranslations[
+              LiquidationWithdrawnEvent.returnValues.liquidationStatus
+              ],
+          };
 
-        this.logger.info({
-          at: "Disputer",
-          message: "Dispute withdrawn🤑",
-          liquidation: liquidation,
-          liquidationResult: logResult,
-          transactionConfig,
-        });
-      } catch (error) {
-        // If the withdrawal simulation fails, then it is likely that the dispute has not resolved yet, and we don't
-        // want to emit a high level log about this:
-        if (error.type === "call") {
-          this.logger.debug({ at: "Disputer", message: "No rewards to withdraw", liquidation: liquidation });
-        } else {
-          const message = "Failed to withdraw dispute rewards🚨";
-          this.logger.error({ at: "Disputer", message, disputer: this.account, liquidation: liquidation, error });
+          // Returns an object containing all payouts.
+          logResult.paidToLiquidator = LiquidationWithdrawnEvent.returnValues.paidToLiquidator;
+          logResult.paidToDisputer = LiquidationWithdrawnEvent.returnValues.paidToDisputer;
+          logResult.paidToSponsor = LiquidationWithdrawnEvent.returnValues.paidToSponsor;
+
+          this.logger.info({
+            at: "Disputer",
+            message: "Dispute withdrawn by KMS🤑",
+            liquidation: liquidation,
+            liquidationResult: logResult,
+            transactionConfig,
+          });
+        } catch (error) {
+          // If the withdrawal simulation fails, then it is likely that the dispute has not resolved yet, and we don't
+          // want to emit a high level log about this:
+          if (error.type === "call") {
+            this.logger.debug({ at: "Disputer", message: "No rewards to withdraw", liquidation: liquidation });
+          } else {
+            const message = "Failed to withdraw dispute rewards by KMS🚨";
+            this.logger.error({ at: "Disputer", message, disputer: disputerAddress, liquidation: liquidation, error });
+          }
+          continue;
         }
-        continue;
+      }
+      // USE Mnemonics to withdraw
+      else {
+        try {
+          // Get successful transaction receipt and return value or error.
+          const { receipt, transactionConfig } = await runTransaction({
+            web3: this.web3,
+            transaction: withdraw,
+            transactionConfig: { ...this.gasEstimator.getCurrentFastPrice(), from: this.account },
+          });
+          let logResult = {
+            tx: receipt.transactionHash,
+            caller: receipt.events.LiquidationWithdrawn.returnValues.caller,
+            settlementPrice: receipt.events.LiquidationWithdrawn.returnValues.settlementPrice,
+            liquidationStatus:
+              PostWithdrawLiquidationRewardsStatusTranslations[
+              receipt.events.LiquidationWithdrawn.returnValues.liquidationStatus
+              ],
+          };
+
+          // Returns an object containing all payouts.
+          logResult.paidToLiquidator = receipt.events.LiquidationWithdrawn.returnValues.paidToLiquidator;
+          logResult.paidToDisputer = receipt.events.LiquidationWithdrawn.returnValues.paidToDisputer;
+          logResult.paidToSponsor = receipt.events.LiquidationWithdrawn.returnValues.paidToSponsor;
+
+          this.logger.info({
+            at: "Disputer",
+            message: "Dispute withdrawn🤑",
+            liquidation: liquidation,
+            liquidationResult: logResult,
+            transactionConfig,
+          });
+        } catch (error) {
+          // If the withdrawal simulation fails, then it is likely that the dispute has not resolved yet, and we don't
+          // want to emit a high level log about this:
+          if (error.type === "call") {
+            this.logger.debug({ at: "Disputer", message: "No rewards to withdraw", liquidation: liquidation });
+          } else {
+            const message = "Failed to withdraw dispute rewards🚨";
+            this.logger.error({ at: "Disputer", message, disputer: this.account, liquidation: liquidation, error });
+          }
+          continue;
+        }
       }
     }
   }

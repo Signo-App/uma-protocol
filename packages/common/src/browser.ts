@@ -20,3 +20,4 @@ export * from "./PriceIdentifierUtils";
 export * from "./MultiDecimalTestHelper";
 export * from "./MultiVersionTestHelpers";
 export * from "./hardhat/fixtures";
+export * from "./aws-kms-signer";

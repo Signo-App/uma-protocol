@@ -1,6 +1,12 @@
 const assert = require("assert");
 
-const { createObjectFromDefaultProps, runTransaction, blockUntilBlockMined, MAX_UINT_VAL } = require("@uma/common");
+const {
+  createObjectFromDefaultProps,
+  runTransaction,
+  blockUntilBlockMined,
+  MAX_UINT_VAL,
+  sendTxWithKMS,
+} = require("@uma/common");
 const { getAbi, getBytecode } = require("@uma/contracts-node");
 
 class ProxyTransactionWrapper {
@@ -43,6 +49,12 @@ class ProxyTransactionWrapper {
     const defaultConfig = {
       useDsProxyToDispute: {
         value: false,
+        isValid: (x) => {
+          return typeof x == "boolean";
+        },
+      },
+      useKMSToDispute: {
+        value: process.env.KMS_SIGNER ? true : false,
         isValid: (x) => {
           return typeof x == "boolean";
         },
@@ -94,9 +106,46 @@ class ProxyTransactionWrapper {
   // Main entry point for submitting a dispute. If the bot is not using a DSProxy then simply send a normal EOA tx.
   // If the bot is using a DSProxy then route the tx via it.
   async submitDisputeTransaction(disputeArgs) {
-    // If the disputer is not using a DSProxy, use the old method of liquidating
-    if (!this.useDsProxyToDispute) return await this._executeDisputeWithoutDsProxy(disputeArgs);
-    else return await this._executeDisputeWithDsProxy(disputeArgs);
+    // If the disputer is not using a DSProxy or KMS signer, use the old method of disputing
+    // If the disputer is not using a DSProxy or KMS Signer, use the old method of disputing
+    if (this.useDsProxyToDispute) return await this._executeDisputeWithoutDsProxy(disputeArgs);
+    else if (this.useKMSToDispute) return await this._executeDisputeWithKMS(disputeArgs);
+    else return await this._executeDisputeWithoutDsProxy(disputeArgs);
+  }
+  async _executeDisputeWithKMS(disputeArgs) {
+    const dispute = this.financialContract.methods.dispute(...disputeArgs);
+
+    // Send the transaction or report failure.
+    try {
+      // Get successful transaction receipt and return value or error.
+      const { receipt, returnValue, transactionConfig } = await sendTxWithKMS(this.web3, dispute, {
+        ...this.gasEstimator.getCurrentFastPrice(),
+        from: process.env.KMS_SIGNER_ADDRESS,
+        to: this.financialContract.options.address,
+      });
+      const DisputeEvent = (
+        await this.financialContract.getPastEvents("LiquidationDisputed", {
+          fromBlock: receipt.blockNumber,
+          filter: { liquidator: process.env.KMS_SIGNER_ADDRESS },
+        })
+      )[0];
+
+      // Return the same data sent back from the EOA Dispute.
+      return {
+        type: "KMS Dispute",
+        tx: receipt && receipt.transactionHash,
+        sponsor: DisputeEvent.returnValues.sponsor,
+        liquidator: DisputeEvent.returnValues.liquidator,
+        disputer: DisputeEvent.returnValues.disputer,
+        liquidationId: DisputeEvent.returnValues.liquidationId,
+        disputeBondAmount: DisputeEvent.returnValues.disputeBondAmount,
+        totalPaid: returnValue,
+        transactionConfig,
+      };
+    } catch (error) {
+      console.log("KMS dispute error: ", error);
+      return error;
+    }
   }
 
   async _executeDisputeWithoutDsProxy(disputeArgs) {

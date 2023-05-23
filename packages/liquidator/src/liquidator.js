@@ -3,6 +3,8 @@ const {
   createObjectFromDefaultProps,
   revertWrapper,
   runTransaction,
+  sendTxWithKMS,
+  blockUntilBlockMined
 } = require("@uma/common");
 
 const LiquidationStrategy = require("./liquidationStrategy");
@@ -260,10 +262,8 @@ class Liquidator {
       });
 
       if (
-        position.sponsor ==
-        (this.proxyTransactionWrapper.useDsProxyToLiquidate
-          ? this.proxyTransactionWrapper.dsProxyManager.getDSProxyAddress()
-          : this.account)
+        position.sponsor == (this.proxyTransactionWrapper.useDsProxyToLiquidate ? this.proxyTransactionWrapper.dsProxyManager.getDSProxyAddress()
+          : process.env.KMS_SIGNER ? process.env.KMS_SIGNER_ADDRESS : this.account)
       ) {
         this.logger.warn({
           at: "Liquidator",
@@ -339,7 +339,6 @@ class Liquidator {
         });
     }
   }
-
   // Queries ongoing liquidations and attempts to withdraw rewards from both expired and disputed liquidations.
   async withdrawRewards() {
     this.logger.debug({
@@ -352,10 +351,17 @@ class Liquidator {
     const expiredLiquidations = this.financialContractClient.getExpiredLiquidations();
     const disputedLiquidations = this.financialContractClient.getDisputedLiquidations();
 
-    // The liquidator address is either the DSProxy (if using a DSProxy to liquidate) or the unlocked account.
-    const liquidatorAddress = this.proxyTransactionWrapper.useDsProxyToLiquidate
-      ? this.proxyTransactionWrapper.dsProxyManager.getDSProxyAddress()
-      : this.account;
+
+
+    // The liquidator address is the DSProxy (if using a DSProxy to dispute), KMS SIGNER(if using a KMS to liquidate) or the unlocked account.
+    let liquidatorAddress;
+    if (this.proxyTransactionWrapper.useDsProxyToDispute) {
+      liquidatorAddress = this.proxyTransactionWrapper.dsProxyManager.getDSProxyAddress();
+    } else if (process.env.KMS_SIGNER) {
+      liquidatorAddress = process.env.KMS_SIGNER_ADDRESS;
+    } else {
+      liquidatorAddress = this.account;
+    }
     const potentialWithdrawableLiquidations = expiredLiquidations
       .concat(disputedLiquidations)
       .filter((liquidation) => liquidation.liquidator === liquidatorAddress);
@@ -378,7 +384,7 @@ class Liquidator {
       // Confirm that liquidation has eligible rewards to be withdrawn.
       let withdrawalCallResponse;
       try {
-        withdrawalCallResponse = await withdraw.call({ from: this.account });
+        withdrawalCallResponse = await withdraw.call({ from: liquidatorAddress });
 
         // Mainnet view/pure functions sometimes don't revert, even if a require is not met. The revertWrapper ensures this
         // caught correctly. see https://forum.openzeppelin.com/t/require-in-view-pure-functions-dont-revert-on-public-networks/1211
@@ -401,39 +407,83 @@ class Liquidator {
 
       // Send the transaction or report failure.
 
-      try {
-        const { receipt, transactionConfig } = await runTransaction({
-          web3: this.web3,
-          transaction: withdraw,
-          transactionConfig: { ...this.gasEstimator.getCurrentFastPrice(), from: this.account },
-        });
+      // USE Mnemonics to withdraw
+      if (process.env.KMS_SIGNER) {
+        try {
+          const { receipt, transactionConfig } = await sendTxWithKMS(
+            this.web3, withdraw,
+            { ...this.gasEstimator.getCurrentFastPrice(), from: process.env.KMS_SIGNER_ADDRESS, to: this.financialContract.options.address },
+          );
+          await blockUntilBlockMined(this.web3, receipt.blockNumber + 1);
 
-        const logResult = {
-          tx: receipt.transactionHash,
-          caller: receipt.events.LiquidationWithdrawn.returnValues.caller,
-          // Settlement price is possible undefined if liquidation expired without a dispute.
-          settlementPrice: receipt.events.LiquidationWithdrawn.returnValues.settlementPrice,
-          liquidationStatus:
-            PostWithdrawLiquidationRewardsStatusTranslations[
+          const LiquidationWithdrawnEvent = (
+            await this.financialContract.getPastEvents("LiquidationWithdrawn", {
+              fromBlock: receipt.blockNumber,
+              filter: { caller: process.env.KMS_SIGNER_ADDRESS },
+            })
+          )[0];
+
+          let logResult = {
+            tx: receipt.transactionHash,
+            caller: LiquidationWithdrawnEvent.returnValues.caller,
+            settlementPrice: LiquidationWithdrawnEvent.returnValues.settlementPrice,
+            liquidationStatus:
+              PostWithdrawLiquidationRewardsStatusTranslations[
+              LiquidationWithdrawnEvent.returnValues.liquidationStatus
+              ],
+          };
+          // Returns an object containing all payouts.
+          logResult.paidToLiquidator = LiquidationWithdrawnEvent.returnValues.paidToLiquidator;
+          logResult.paidToDisputer = LiquidationWithdrawnEvent.returnValues.paidToDisputer;
+          logResult.paidToSponsor = LiquidationWithdrawnEvent.returnValues.paidToSponsor;
+
+          this.logger.info({
+            at: "Liquidator",
+            message: "Liquidation withdrawn by KMS🤑",
+            liquidation: liquidation,
+            liquidationResult: logResult,
+            transactionConfig,
+          });
+        } catch (error) {
+          this.logger.error({ at: "Liquidator", message: "Failed to withdraw liquidation rewards by KMS🚨", error });
+          continue;
+        }
+      }
+      else {
+        try {
+          const { receipt, transactionConfig } = await runTransaction({
+            web3: this.web3,
+            transaction: withdraw,
+            transactionConfig: { ...this.gasEstimator.getCurrentFastPrice(), from: this.account },
+          });
+
+          const logResult = {
+            tx: receipt.transactionHash,
+            caller: receipt.events.LiquidationWithdrawn.returnValues.caller,
+            // Settlement price is possible undefined if liquidation expired without a dispute.
+            settlementPrice: receipt.events.LiquidationWithdrawn.returnValues.settlementPrice,
+            liquidationStatus:
+              PostWithdrawLiquidationRewardsStatusTranslations[
               receipt.events.LiquidationWithdrawn.returnValues.liquidationStatus
-            ],
-        };
+              ],
+          };
 
-        // Returns an object containing all payouts.
-        logResult.paidToLiquidator = receipt.events.LiquidationWithdrawn.returnValues.paidToLiquidator;
-        logResult.paidToDisputer = receipt.events.LiquidationWithdrawn.returnValues.paidToDisputer;
-        logResult.paidToSponsor = receipt.events.LiquidationWithdrawn.returnValues.paidToSponsor;
+          // Returns an object containing all payouts.
+          logResult.paidToLiquidator = receipt.events.LiquidationWithdrawn.returnValues.paidToLiquidator;
+          logResult.paidToDisputer = receipt.events.LiquidationWithdrawn.returnValues.paidToDisputer;
+          logResult.paidToSponsor = receipt.events.LiquidationWithdrawn.returnValues.paidToSponsor;
 
-        this.logger.info({
-          at: "Liquidator",
-          message: "Liquidation withdrawn🤑",
-          liquidation: liquidation,
-          liquidationResult: logResult,
-          transactionConfig,
-        });
-      } catch (error) {
-        this.logger.error({ at: "Liquidator", message: "Failed to withdraw liquidation rewards🚨", error });
-        continue;
+          this.logger.info({
+            at: "Liquidator",
+            message: "Liquidation withdrawn🤑",
+            liquidation: liquidation,
+            liquidationResult: logResult,
+            transactionConfig,
+          });
+        } catch (error) {
+          this.logger.error({ at: "Liquidator", message: "Failed to withdraw liquidation rewards🚨", error });
+          continue;
+        }
       }
     }
   }
