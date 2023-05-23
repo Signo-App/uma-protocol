@@ -262,11 +262,7 @@ async function run({
       liquidatorConfig,
     });
 
-    const walletBalanceAlarm = new WalletBalanceAlarm({
-      logger,
-      financialContractClient,
-      minSponsorTokens
-    });
+    const walletBalanceAlarm = new WalletBalanceAlarm({ logger, financialContractClient, minSponsorTokens });
 
     logger.debug({
       at: "Liquidator#index",
@@ -319,8 +315,6 @@ async function run({
         async () => {
           // Checks if bot wallet balance is above the healthy balance threshold (minSponsorAmount * number of open positions)
 
-          // Update the liquidators state. This will update the clients, price feeds and gas estimator.
-          await liquidator.update();
           if (!isExpiredOrShutdown) {
             // Check for liquidatable positions and submit liquidations. Bounded by current synthetic balance and
             // considers override price if the user has specified one.
