@@ -12,6 +12,7 @@ const {
 } = require("@uma/common");
 // JS libs
 const { Liquidator } = require("./src/liquidator");
+const { WalletBalanceAlarm } = require("./src/WalletBalanceAlarm");
 const { ProxyTransactionWrapper } = require("./src/proxyTransactionWrapper");
 const {
   GasEstimator,
@@ -155,57 +156,6 @@ async function run({
       }
     };
 
-    // Checks whether the liquidator bot wallet balance is >= total open positions * minimum sponsor amount
-    const calculateBotWalletBalance = async () => {
-      try {
-        // update client state
-        this.client = financialContractClient;
-        this.web3 = this.client.web3;
-        this.syntheticToken = syntheticToken;
-
-        await this.client.update();
-
-        let minSponsorTokens = null;
-        if (liquidatorConfig.contractType === "ExpiringMultiParty") {
-          minSponsorTokens = await financialContract.methods.minSponsorTokens().call();
-        }
-
-        const numOfOpenPositions = this.client.getAllPositions().length;
-
-        console.log(`minSponsorTokens: ${minSponsorTokens}`);
-        console.log(`Amount of openPositions: ${numOfOpenPositions}`);
-
-        let targetWalletBalance = minSponsorTokens * numOfOpenPositions; // Assuming minSponsorTokens is a big number
-        console.log(`Bot wallet balance should be >= : ${targetWalletBalance.toString()}`);
-
-        // fetches the current synth balance from the liquidator bot wallet
-        const currentBotWalletBalance = await proxyTransactionWrapper.getEffectiveSyntheticTokenBalance();
-        console.log(`Current bot wallet balance is: ${currentBotWalletBalance}`);
-
-        if (currentBotWalletBalance < targetWalletBalance) {
-          logger.warn({
-            at: "Liquidator#index",
-            message: `Bot wallet balance is ${currentBotWalletBalance.toString()} which is below the target wallet balance threshold of ${targetWalletBalance.toString()}. Replenish bot wallet balance immediately`,
-          });
-          return true;
-        } else {
-          logger.info({
-            at: "Liquidator#index",
-            message: `Current bot wallet balance of ${currentBotWalletBalance.toString()} meets the target wallet balance threshold of ${targetWalletBalance.toString()}. Bot wallet balance is within the healthy range.`,
-          });
-          return false;
-        }
-      } catch (error) {
-        logger.error({
-          at: "Liquidator#index",
-          message: "An error occurred during the calculation of the bot wallet balance",
-          error: error,
-        });
-
-        throw error;
-      }
-    };
-
     // Generate Financial Contract properties to inform bot of important on-chain state values that we only want to query once.
     const [
       collateralRequirement,
@@ -312,6 +262,12 @@ async function run({
       liquidatorConfig,
     });
 
+    const walletBalanceAlarm = new WalletBalanceAlarm({
+      logger,
+      financialContractClient,
+      minSponsorTokens
+    });
+
     logger.debug({
       at: "Liquidator#index",
       message: "Liquidator initialized",
@@ -362,7 +318,6 @@ async function run({
       await retry(
         async () => {
           // Checks if bot wallet balance is above the healthy balance threshold (minSponsorAmount * number of open positions)
-          await calculateBotWalletBalance();
 
           // Update the liquidators state. This will update the clients, price feeds and gas estimator.
           await liquidator.update();
@@ -371,6 +326,8 @@ async function run({
             // considers override price if the user has specified one.
             const currentSyntheticBalance = await proxyTransactionWrapper.getEffectiveSyntheticTokenBalance();
 
+            // Checks whether the liquidator bot wallet balance is in healthy range per strategy
+            await walletBalanceAlarm.checkBotBalanceAgainstStrategy(currentSyntheticBalance);
             await liquidator.liquidatePositions(currentSyntheticBalance, liquidatorOverridePrice);
           }
           // Check for any finished liquidations that can be withdrawn.
