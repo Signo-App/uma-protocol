@@ -163,11 +163,8 @@ async function run({
         this.web3 = this.client.web3;
         this.syntheticToken = syntheticToken;
 
-        await this.client.update();
-
-        let minSponsorTokens = null;
         if (liquidatorConfig.contractType === "ExpiringMultiParty") {
-          minSponsorTokens = await financialContract.methods.minSponsorTokens().call();
+          minSponsorTokens;
         }
 
         const numOfOpenPositions = this.client.getAllPositions().length;
@@ -361,11 +358,11 @@ async function run({
 
       await retry(
         async () => {
-          // Checks if bot wallet balance is above the healthy balance threshold (minSponsorAmount * number of open positions)
+          // First, update the liquidators state. This will update the clients, price feeds and gas estimator.
+          await liquidator.update();
+          // Second, once liquidators state is updated, check if bot wallet balance is above the healthy balance threshold (minSponsorAmount * number of open positions)
           await calculateBotWalletBalance();
 
-          // Update the liquidators state. This will update the clients, price feeds and gas estimator.
-          await liquidator.update();
           if (!isExpiredOrShutdown) {
             // Check for liquidatable positions and submit liquidations. Bounded by current synthetic balance and
             // considers override price if the user has specified one.
