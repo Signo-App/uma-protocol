@@ -1,9 +1,5 @@
 class WalletBalanceAlarm {
-  constructor({
-    logger,
-    financialContractClient,
-    minSponsorTokens,
-  }) {
+  constructor({ logger, financialContractClient, minSponsorTokens }) {
     this.logger = logger;
     this.financialContractClient = financialContractClient;
     this.minSponsorTokens = minSponsorTokens;
@@ -47,7 +43,7 @@ class WalletBalanceAlarm {
     }
   }
 
-  calculateTargetBalance = () => {
+  calculateTargetBalance() {
     return this.minSponsorTokens * this.numOfOpenPositions;
   }
 }
