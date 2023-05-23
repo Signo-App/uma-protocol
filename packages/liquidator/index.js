@@ -313,6 +313,7 @@ async function run({
 
       await retry(
         async () => {
+          // Update the liquidators state. This will update the clients, price feeds and gas estimator.
           await liquidator.update();
           if (!isExpiredOrShutdown) {
             // Check for liquidatable positions and submit liquidations. Bounded by current synthetic balance and
