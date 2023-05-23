@@ -313,6 +313,7 @@ async function run({
 
       await retry(
         async () => {
+          await liquidator.update();
           if (!isExpiredOrShutdown) {
             // Check for liquidatable positions and submit liquidations. Bounded by current synthetic balance and
             // considers override price if the user has specified one.
