@@ -1,11 +1,10 @@
 import { ethers, UnsignedTransaction } from "ethers";
 import type { ContractSendMethod } from "web3-eth-contract";
 import type Web3 from "web3";
-import { _signDigest, AwsKmsSignerCredentials } from "./aws-kms-utils";
+import { _signDigest, AwsKmsSignerCredentials, getEthereumAddress, getPublicKey } from "./aws-kms-utils";
 import type { TransactionReceipt } from "web3-core";
 import { accountHasPendingTransactions, getPendingTransactionCount } from "./TransactionUtils";
 const GAS_LIMIT_BUFFER = 1.25;
-
 
 const kmsCredentials: AwsKmsSignerCredentials = {
   accessKeyId: process.env.KMS_ACCESS_KEY_ID, // credentials for your IAM user with KMS access
@@ -14,12 +13,17 @@ const kmsCredentials: AwsKmsSignerCredentials = {
   keyId: process.env.KMS_SIGNER!,
 };
 
+(async () => {
+  if (kmsCredentials && kmsCredentials.keyId) {
+    console.log("🤖 is using KMS!");
+    const pubKey = await getPublicKey(kmsCredentials);
+    const kmsPublicKey = getEthereumAddress(pubKey.PublicKey as Buffer);
+    console.log("KMS PUBLIC KEY: ", kmsPublicKey);
+  }
+})();
+
 // this function is used to send a web3 transaction and sign it with AWS KMS
-export async function sendTxWithKMS(
-  _web3: Web3,
-  transaction: ContractSendMethod,
-  transactionConfig: any
-) {
+export async function sendTxWithKMS(_web3: Web3, transaction: ContractSendMethod, transactionConfig: any) {
   const web3 = _web3;
   const encodedFunctionCall = transaction.encodeABI();
 
@@ -61,8 +65,7 @@ export async function sendTxWithKMS(
       type: 2,
       chainId: await web3.eth.getChainId(),
     };
-  }
-  else if (transactionConfig.gasPrice) {
+  } else if (transactionConfig.gasPrice) {
     // Legacy TX Type
     txParams = {
       gasLimit: Math.floor(estimatedGas * GAS_LIMIT_BUFFER),
@@ -74,14 +77,16 @@ export async function sendTxWithKMS(
       type: 0,
       chainId: await web3.eth.getChainId(),
     };
-  } else { throw new Error("No gas information provided"); }
+  } else {
+    throw new Error("No gas information provided");
+  }
 
   const serializedUnsignedTx = ethers.utils.serializeTransaction(<UnsignedTransaction>txParams);
   const transactionSignature = await _signDigest(ethers.utils.keccak256(serializedUnsignedTx), kmsCredentials);
   const serializedTx = ethers.utils.serializeTransaction(<UnsignedTransaction>txParams, transactionSignature);
 
   // Promi event => promise resolved on event receipt
-  const receipt = (await web3.eth.sendSignedTransaction(serializedTx) as unknown) as TransactionReceipt;
+  const receipt = ((await web3.eth.sendSignedTransaction(serializedTx)) as unknown) as TransactionReceipt;
   const transactionHash = receipt.transactionHash;
 
   return { receipt, transactionHash, returnValue, transactionConfig };
