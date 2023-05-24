@@ -94,7 +94,7 @@ contract PricelessPositionManager is Lockable {
     // How much to offer the Optimistic Oracle as a reward for price requests
     FixedPoint.Unsigned public ooReward;
 
-    address public immutable owner;
+    address public owner;
     // Instance of FinancialProductLibrary to provide custom price and collateral requirement transformations to extend
     // the functionality of the EMP to support a wider range of financial products.
     FinancialProductLibrary public financialProductLibrary;
@@ -123,6 +123,7 @@ contract PricelessPositionManager is Lockable {
         uint256 indexed tokensBurned
     );
     event EmergencyShutdown(address indexed caller, uint256 originalExpirationTimestamp, uint256 shutdownTimestamp);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     /****************************************
      *               MODIFIERS              *
@@ -152,6 +153,14 @@ contract PricelessPositionManager is Lockable {
 
     modifier noPendingWithdrawal(address sponsor) {
         _positionHasNoPendingWithdrawal(sponsor);
+        _;
+    }
+
+    /**
+     * @dev Throws if called by any account other than the owner.
+     */
+    modifier onlyOwner() {
+        require(msg.sender == owner, "caller is not the owner");
         _;
     }
 
@@ -625,9 +634,7 @@ contract PricelessPositionManager is Lockable {
      * which prevents re-entry into this function or the `expire` function. No fees are paid when calling
      * `emergencyShutdown` as the governor who would call the function would also receive the fees.
      */
-    function emergencyShutdown() external onlyPreExpiration onlyOpenState nonReentrant {
-        require(msg.sender == owner);
-
+    function emergencyShutdown() external onlyPreExpiration onlyOpenState onlyOwner {
         contractState = ContractState.ExpiredPriceRequested;
         // Expiratory time now becomes the current time (emergency shutdown time).
         // Price requested at this time stamp. `settleExpired` can now withdraw at this timestamp.
@@ -636,6 +643,15 @@ contract PricelessPositionManager is Lockable {
         _requestOraclePrice_senderPays(expirationTimestamp);
 
         emit EmergencyShutdown(msg.sender, oldExpirationTimestamp, expirationTimestamp);
+    }
+
+    /**
+     * @dev Transfers ownership of the contract to a new account (`newOwner`).
+     * Can only be called by the current owner.
+     */
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0), "new owner is the zero address");
+        _transferOwnership(newOwner);
     }
 
     /**
@@ -670,6 +686,16 @@ contract PricelessPositionManager is Lockable {
     /****************************************
      *          INTERNAL FUNCTIONS          *
      ****************************************/
+
+    /**
+     * @dev Transfers ownership of the contract to a new account (`newOwner`).
+     * Internal function without access restriction.
+     */
+    function _transferOwnership(address newOwner) internal {
+        address oldOwner = owner;
+        owner = newOwner;
+        emit OwnershipTransferred(oldOwner, newOwner);
+    }
 
     // Reduces a sponsor's position and global counters by the specified parameters. Handles deleting the entire
     // position if the entire position is being removed. Does not make any external transfers.

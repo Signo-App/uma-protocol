@@ -11,24 +11,22 @@ const ExpiringMultiParty = getContract("ExpiringMultiParty");
 const Finder = getContract("Finder");
 const IdentifierWhitelist = getContract("IdentifierWhitelist");
 const Token = getContract("ExpandedERC20");
-const Timer = getContract("Timer");
 
 describe("ExpiringMultiParty", function () {
-  let finder, timer;
+  let finder;
   let accounts;
 
   before(async () => {
     // Accounts.
     accounts = await web3.eth.getAccounts();
     await runDefaultFixture(hre);
-    timer = await Timer.deployed();
     finder = await Finder.deployed();
   });
 
   it("Can deploy", async function () {
     const collateralToken = await Token.new("Wrapped Ether", "WETH", 18).send({ from: accounts[0] });
     const syntheticToken = await Token.new("Test Synthetic Token", "SYNTH", 18).send({ from: accounts[0] });
-    const currentTime = Number(await timer.methods.getCurrentTime().call());
+    const currentTime = Number((await hre.ethers.provider.getBlock("latest")).timestamp);
 
     const constructorParams = {
       expirationTimestamp: (currentTime + 1000).toString(),
@@ -43,8 +41,10 @@ describe("ExpiringMultiParty", function () {
       sponsorDisputeRewardPercentage: { rawValue: toWei("0.1") },
       disputerDisputeRewardPercentage: { rawValue: toWei("0.1") },
       minSponsorTokens: { rawValue: toWei("1") },
-      timerAddress: timer.options.address,
+      owner: accounts[0],
       financialProductLibraryAddress: ZERO_ADDRESS,
+      ooReward: { rawValue: hre.ethers.utils.parseUnits("100", "6") },
+      ancillaryData: "0x73796e746849443a20226e6c687069222c20713a20436f6e766572742070726963652072657175657374",
     };
 
     const identifierWhitelist = await IdentifierWhitelist.deployed();
