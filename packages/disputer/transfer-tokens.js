@@ -1,6 +1,6 @@
 //yarn workspace @uma/financial-templates-lib build && node packages/disputer/transfer-tokens.js --network goerli_mnemonic --tokenAddress 0x...  --recipientAddress 0x... --amount 
 // Note:
-// 1) the script will use the address of the wallet used to run the script as the from address.
+// 1) the script will use the address of KMS Signer
 // 2) if you provide max for amount then the script will take all tokens. If you provide a specific number, it is assumed
 // to be a string. No internal scaling is done on the number. 1 eth should be therefore represented as 1000000000000000000
 
