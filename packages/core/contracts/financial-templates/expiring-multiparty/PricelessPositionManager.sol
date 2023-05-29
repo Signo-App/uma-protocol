@@ -933,7 +933,7 @@ contract PricelessPositionManager is Lockable {
         }
     }
 
-    function _transformPriceIdentifier(uint256 requestTime) public view returns (bytes32) {
+    function _transformPriceIdentifier(uint256 requestTime) internal view returns (bytes32) {
         if (!address(financialProductLibrary).isContract()) return priceIdentifier;
         try financialProductLibrary.transformPriceIdentifier(priceIdentifier, requestTime) returns (
             bytes32 transformedIdentifier
