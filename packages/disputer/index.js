@@ -12,9 +12,7 @@ const {
 } = require("@uma/common");
 // JS libs
 const { Disputer } = require("./src/disputer");
-const {
-  WalletBalanceAlarm,
-} = require("/Users/Kriskate/Documents/GitHub/bots-startup/uma-protocol/packages/liquidator/src/walletBalanceAlarm");
+const { WalletBalanceAlarm } = require("../liquidator/src/walletBalanceAlarm");
 const { ProxyTransactionWrapper } = require("./src/proxyTransactionWrapper");
 const {
   multicallAddressMap,
