@@ -12,7 +12,7 @@ const {
 } = require("@uma/common");
 // JS libs
 const { Liquidator } = require("./src/liquidator");
-const { WalletBalanceAlarm } = require("./src/WalletBalanceAlarm");
+const { WalletBalanceAlarm } = require("./src/walletBalanceAlarm");
 const { ProxyTransactionWrapper } = require("./src/proxyTransactionWrapper");
 const {
   GasEstimator,
@@ -262,7 +262,12 @@ async function run({
       liquidatorConfig,
     });
 
-    const walletBalanceAlarm = new WalletBalanceAlarm({ logger, financialContractClient, minSponsorTokens });
+    const walletBalanceAlarm = new WalletBalanceAlarm({
+      logger,
+      financialContractClient,
+      financialContract,
+      minSponsorTokens,
+    });
 
     logger.debug({
       at: "Liquidator#index",
@@ -319,13 +324,17 @@ async function run({
             // Check for liquidatable positions and submit liquidations. Bounded by current synthetic balance and
             // considers override price if the user has specified one.
             const currentSyntheticBalance = await proxyTransactionWrapper.getEffectiveSyntheticTokenBalance();
+            const currentCollateralBalance = await proxyTransactionWrapper.getCollateralTokenBalance();
 
             // Checks whether the liquidator bot wallet balance is in healthy range per strategy
-            await walletBalanceAlarm.checkBotBalanceAgainstStrategy(currentSyntheticBalance);
-            await liquidator.liquidatePositions(currentSyntheticBalance, liquidatorOverridePrice);
+            await walletBalanceAlarm.checkLiquidatorBotBalanceAgainstStrategy(
+              currentSyntheticBalance,
+              currentCollateralBalance
+            );
+            // await liquidator.liquidatePositions(currentSyntheticBalance, liquidatorOverridePrice);
           }
           // Check for any finished liquidations that can be withdrawn.
-          await liquidator.withdrawRewards();
+          // await liquidator.withdrawRewards();
         },
         {
           retries: errorRetries,

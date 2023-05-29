@@ -110,6 +110,11 @@ class ProxyTransactionWrapper {
     };
   }
 
+  async getCollateralTokenBalance() {
+    const collateralTokenBalance = await this.collateralToken.methods.balanceOf(this.account).call();
+    return collateralTokenBalance;
+  }
+
   // Get the effective synthetic token balance. If the bot is executing in normal mode (liquidations sent from an EOA)
   // then this is simply the token balance of the unlocked account. If the liquidator is using a DSProxy to liquidate,
   // then consider the synthetics could be minted, + any synthetics the DSProxy already has.

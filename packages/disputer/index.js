@@ -12,6 +12,9 @@ const {
 } = require("@uma/common");
 // JS libs
 const { Disputer } = require("./src/disputer");
+const {
+  WalletBalanceAlarm,
+} = require("/Users/Kriskate/Documents/GitHub/bots-startup/uma-protocol/packages/liquidator/src/walletBalanceAlarm");
 const { ProxyTransactionWrapper } = require("./src/proxyTransactionWrapper");
 const {
   multicallAddressMap,
@@ -115,10 +118,8 @@ async function run({
 
     // Setup contract instances.
     const { getAbi: getVersionedAbi } = require(getContractsNodePackageAliasForVerion(disputerConfig.contractVersion));
-    const financialContract = new web3.eth.Contract(
-      getVersionedAbi(disputerConfig.contractType),
-      financialContractAddress
-    );
+    const abi = getVersionedAbi(disputerConfig.contractType);
+    const financialContract = new web3.eth.Contract(abi, financialContractAddress);
 
     // Generate Financial Contract properties to inform bot of important on-chain state values that we only want to query once.
     const [collateralTokenAddress, syntheticTokenAddress] = await Promise.all([
@@ -188,6 +189,7 @@ async function run({
       web3,
       financialContract,
       gasEstimator,
+      collateralToken,
       account: accounts[0],
       dsProxyManager,
       proxyTransactionWrapperConfig,
@@ -202,6 +204,13 @@ async function run({
       account: accounts[0],
       financialContractProps,
       disputerConfig,
+    });
+
+    const walletBalanceAlarm = new WalletBalanceAlarm({
+      logger,
+      financialContractClient,
+      financialContract,
+      bufferPercentage: 0.1,
     });
 
     logger.debug({
@@ -236,6 +245,10 @@ async function run({
       await retry(
         async () => {
           await disputer.update();
+          const currentCollateralBalance = await proxyTransactionWrapper.getCollateralTokenBalance();
+
+          // Checks whether the disputer bot wallet collateral (USDC) balance is in healthy range per strategy
+          await walletBalanceAlarm.checkDisputerBotBalanceAgainstStrategy(currentCollateralBalance);
           await disputer.dispute(disputerOverridePrice);
           await disputer.withdrawRewards();
         },

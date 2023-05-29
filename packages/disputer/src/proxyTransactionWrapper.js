@@ -22,6 +22,7 @@ class ProxyTransactionWrapper {
     web3,
     financialContract,
     gasEstimator,
+    collateralToken,
     account,
     dsProxyManager = undefined,
     proxyTransactionWrapperConfig,
@@ -29,6 +30,7 @@ class ProxyTransactionWrapper {
     this.web3 = web3;
     this.financialContract = financialContract;
     this.gasEstimator = gasEstimator;
+    this.collateralToken = collateralToken;
     this.account = account;
     this.dsProxyManager = dsProxyManager;
 
@@ -97,6 +99,11 @@ class ProxyTransactionWrapper {
     // If the disputer is not using a DSProxy, use the old method of liquidating
     if (!this.useDsProxyToDispute) return await this._executeDisputeWithoutDsProxy(disputeArgs);
     else return await this._executeDisputeWithDsProxy(disputeArgs);
+  }
+
+  async getCollateralTokenBalance() {
+    const collateralTokenBalance = await this.collateralToken.methods.balanceOf(this.account).call();
+    return collateralTokenBalance;
   }
 
   async _executeDisputeWithoutDsProxy(disputeArgs) {
