@@ -12,6 +12,7 @@ const {
 } = require("@uma/common");
 // JS libs
 const { Disputer } = require("./src/disputer");
+const { DisputerBalanceAlarm } = require("./src/disputerBalanceAlarm");
 const { ProxyTransactionWrapper } = require("./src/proxyTransactionWrapper");
 const {
   multicallAddressMap,
@@ -188,6 +189,7 @@ async function run({
       web3,
       financialContract,
       gasEstimator,
+      collateralToken,
       account: accounts[0],
       dsProxyManager,
       proxyTransactionWrapperConfig,
@@ -202,6 +204,13 @@ async function run({
       account: accounts[0],
       financialContractProps,
       disputerConfig,
+    });
+
+    const disputerBalanceAlarm = new DisputerBalanceAlarm({
+      logger,
+      financialContractClient,
+      financialContract,
+      bufferPercentage: 0.1,
     });
 
     logger.debug({
@@ -236,6 +245,9 @@ async function run({
       await retry(
         async () => {
           await disputer.update();
+          const currentCollateralBalance = await proxyTransactionWrapper.getCollateralTokenBalance();
+          // Checks whether the disputer bot wallet collateral (USDC) balance is in healthy range per strategy
+          await disputerBalanceAlarm.checkDisputerBotBalanceAgainstStrategy(currentCollateralBalance);
           await disputer.dispute(disputerOverridePrice);
           await disputer.withdrawRewards();
         },
