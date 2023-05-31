@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier */
 // disputer/src/DisputerBalanceAlarm.js
 class DisputerBalanceAlarm {
   constructor({ logger, financialContractClient, financialContract, bufferPercentage }) {
