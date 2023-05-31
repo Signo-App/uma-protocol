@@ -107,7 +107,13 @@ class ProxyTransactionWrapper {
   }
 
   async getCollateralTokenBalance() {
-    const collateralTokenBalance = await this.collateralToken.methods.balanceOf(this.account).call();
+    let account;
+    if (process.env.KMS_SIGNER) {
+      account = process.env.KMS_SIGNER_ADDRESS;
+    } else {
+      account = this.account;
+    }
+    const collateralTokenBalance = await this.collateralToken.methods.balanceOf(account).call();
     return collateralTokenBalance;
   }
 
