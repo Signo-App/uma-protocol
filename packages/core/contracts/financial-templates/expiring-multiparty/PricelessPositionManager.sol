@@ -780,6 +780,15 @@ contract PricelessPositionManager is Lockable {
     }
 
     /**
+     * @dev Transfers ownership of the contract to a new account (`newOwner`).
+     * Can only be called by the current owner.
+     */
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0), "new owner is the zero address");
+        _transferOwnership(newOwner);
+    }
+
+    /**
      * @notice Accessor method to compute a transformed price using the finanicalProductLibrary specified at contract
      * deployment. If no library was provided then no modification to the price is done.
      * @param price input price to be transformed.
