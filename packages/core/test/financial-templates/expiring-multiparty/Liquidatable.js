@@ -803,7 +803,6 @@ describe("Liquidatable", function () {
       // Mint a single collateral token for the liquidator.
       await collateralToken.methods.mint(liquidator, finalFeeAmount).send({ from: contractDeployer });
 
-      console.log({ timenowDebug: (await web3.eth.getBlock("latest")).timestamp });
       // Create a Liquidation
       liquidationResult = await liquidationContract.methods
         .createLiquidation(
@@ -951,12 +950,6 @@ describe("Liquidatable", function () {
         const totalPaid = await liquidationContract.methods
           .dispute(liquidationParams.liquidationId, sponsor)
           .call({ from: disputer });
-        console.log({
-          totalPaid: totalPaid.toString(),
-          disputeBond: disputeBond.toString(),
-          finalFeeAmount: finalFeeAmount.toString(),
-          paid: disputeBond.add(finalFeeAmount).toString(),
-        });
         assert.equal(totalPaid.toString(), disputeBond.add(ooReward).toString());
 
         // Check that store's collateral balance increases
@@ -1487,7 +1480,6 @@ describe("Liquidatable", function () {
           // Settle the dispute as FAILED. To achieve this the liquidation must be correct.
           // const liquidationTime = (await web3.eth.getBlock("latest")).timestamp;
           const disputePrice = toWei("1.3");
-          console.log({ priceFeedIdentifier, liquidationTime, disputePrice, acc: accounts[0] });
           await mockOracle.methods
             .pushPrice(priceFeedIdentifier, liquidationTime, disputePrice)
             .send({ from: accounts[0] });
@@ -1825,7 +1817,6 @@ describe("Liquidatable", function () {
       // Dispute fails, liquidator withdraws, liquidation is deleted
       await liquidationContract.methods.dispute(liquidationParams.liquidationId, sponsor).send({ from: disputer });
       const disputePrice = toWei("1.3");
-      console.log({ pendingRequests: await mockOracle.methods.getPendingQueries().call() });
       await mockOracle.methods
         .pushPrice(priceFeedIdentifier, liquidationTime, disputePrice)
         .send({ from: accounts[0] });

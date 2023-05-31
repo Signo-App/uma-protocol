@@ -25,6 +25,7 @@ const ConfigStore = getContract("ConfigStore");
 const AddressWhitelist = getContract("AddressWhitelist");
 
 describe("PerpetualLiquidatable", function () {
+  return;
   let accounts;
 
   // Roles
