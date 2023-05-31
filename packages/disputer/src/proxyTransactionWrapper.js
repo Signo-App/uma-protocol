@@ -123,10 +123,6 @@ class ProxyTransactionWrapper {
         from: process.env.KMS_SIGNER_ADDRESS,
         to: this.financialContract.options.address,
       });
-
-      // Wait exactly one block to fetch events. This ensures that the events have been indexed by your node.
-      await blockUntilBlockMined(this.web3, receipt.blockNumber + 1);
-
       const DisputeEvent = (
         await this.financialContract.getPastEvents("LiquidationDisputed", {
           fromBlock: receipt.blockNumber,
