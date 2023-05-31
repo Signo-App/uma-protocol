@@ -12,7 +12,7 @@ const {
 } = require("@uma/common");
 // JS libs
 const { Disputer } = require("./src/disputer");
-const { WalletBalanceAlarm } = require("../liquidator/src/walletBalanceAlarm");
+const { DisputerBalanceAlarm } = require("./src/disputerBalanceAlarm");
 const { ProxyTransactionWrapper } = require("./src/proxyTransactionWrapper");
 const {
   multicallAddressMap,
@@ -116,8 +116,10 @@ async function run({
 
     // Setup contract instances.
     const { getAbi: getVersionedAbi } = require(getContractsNodePackageAliasForVerion(disputerConfig.contractVersion));
-    const abi = getVersionedAbi(disputerConfig.contractType);
-    const financialContract = new web3.eth.Contract(abi, financialContractAddress);
+    const financialContract = new web3.eth.Contract(
+      getVersionedAbi(disputerConfig.contractType),
+      financialContractAddress
+    );
 
     // Generate Financial Contract properties to inform bot of important on-chain state values that we only want to query once.
     const [collateralTokenAddress, syntheticTokenAddress] = await Promise.all([
@@ -204,7 +206,7 @@ async function run({
       disputerConfig,
     });
 
-    const walletBalanceAlarm = new WalletBalanceAlarm({
+    const disputerBalanceAlarm = new DisputerBalanceAlarm({
       logger,
       financialContractClient,
       financialContract,
@@ -246,7 +248,7 @@ async function run({
           const currentCollateralBalance = await proxyTransactionWrapper.getCollateralTokenBalance();
 
           // Checks whether the disputer bot wallet collateral (USDC) balance is in healthy range per strategy
-          await walletBalanceAlarm.checkDisputerBotBalanceAgainstStrategy(currentCollateralBalance);
+          await disputerBalanceAlarm.checkDisputerBotBalanceAgainstStrategy(currentCollateralBalance);
           await disputer.dispute(disputerOverridePrice);
           await disputer.withdrawRewards();
         },

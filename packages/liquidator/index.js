@@ -12,7 +12,7 @@ const {
 } = require("@uma/common");
 // JS libs
 const { Liquidator } = require("./src/liquidator");
-const { WalletBalanceAlarm } = require("./src/walletBalanceAlarm");
+const { LiquidatorBalanceAlarm } = require("./src/liquidatorBalanceAlarm");
 const { ProxyTransactionWrapper } = require("./src/proxyTransactionWrapper");
 const {
   GasEstimator,
@@ -262,7 +262,7 @@ async function run({
       liquidatorConfig,
     });
 
-    const walletBalanceAlarm = new WalletBalanceAlarm({
+    const liquidatorBalanceAlarm = new LiquidatorBalanceAlarm({
       logger,
       financialContractClient,
       financialContract,
@@ -327,7 +327,7 @@ async function run({
             const currentCollateralBalance = await proxyTransactionWrapper.getCollateralTokenBalance();
 
             // Checks whether the liquidator bot wallet balance is in healthy range per strategy
-            await walletBalanceAlarm.checkLiquidatorBotBalanceAgainstStrategy(
+            await liquidatorBalanceAlarm.checkLiquidatorBotBalanceAgainstStrategy(
               currentSyntheticBalance,
               currentCollateralBalance
             );
