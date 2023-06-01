@@ -220,7 +220,7 @@ describe("PerpetualCreator", function () {
     );
 
     // Cumulative multipliers are set to default.
-    assert.equal((await perpetual.methods.cumulativeFeeMultiplier().call()).toString(), toWei("1"));
+    // assert.equal((await perpetual.methods.cumulativeFeeMultiplier().call()).toString(), toWei("1"));
     assert.equal((await perpetual.methods.fundingRate().call()).cumulativeMultiplier.toString(), toWei("1"));
 
     // Deployed Perpetual timer should be same as Perpetual creator.

@@ -6,9 +6,10 @@ import "../interfaces/OracleInterface.sol";
 import "../interfaces/IdentifierWhitelistInterface.sol";
 import "../interfaces/FinderInterface.sol";
 import "../implementation/Constants.sol";
+import "../../common/interfaces/ExpandedIERC20.sol";
 
 // A mock oracle used for testing.
-contract MockOracle is OracleInterface, Testable {
+contract MockOracle is Testable {
     // Represents an available price. Have to keep a separate bool to allow for price=0.
     struct Price {
         bool isAvailable;
@@ -47,14 +48,21 @@ contract MockOracle is OracleInterface, Testable {
 
     // Enqueues a request (if a request isn't already present) for the given (identifier, time) pair.
 
-    function requestPrice(bytes32 identifier, uint256 time) public override {
+    function requestPrice(
+        bytes32 identifier,
+        uint256 timestamp,
+        bytes memory ancillaryData,
+        IERC20 currency,
+        uint256 reward
+    ) public returns (uint256) {
         require(_getIdentifierWhitelist().isIdentifierSupported(identifier));
-        Price storage lookup = verifiedPrices[identifier][time];
-        if (!lookup.isAvailable && !queryIndices[identifier][time].isValid) {
+        Price storage lookup = verifiedPrices[identifier][timestamp];
+        if (!lookup.isAvailable && !queryIndices[identifier][timestamp].isValid) {
             // New query, enqueue it for review.
-            queryIndices[identifier][time] = QueryIndex(true, requestedPrices.length);
-            requestedPrices.push(QueryPoint(identifier, time));
+            queryIndices[identifier][timestamp] = QueryIndex(true, requestedPrices.length);
+            requestedPrices.push(QueryPoint(identifier, timestamp));
         }
+        return 0;
     }
 
     // Pushes the verified price for a requested query.
@@ -80,13 +88,30 @@ contract MockOracle is OracleInterface, Testable {
     }
 
     // Checks whether a price has been resolved.
-    function hasPrice(bytes32 identifier, uint256 time) public view override returns (bool) {
+    function hasPrice(bytes32 identifier, uint256 time) public view returns (bool) {
         Price storage lookup = verifiedPrices[identifier][time];
         return lookup.isAvailable;
     }
 
+    function hasPrice(
+        address requester,
+        bytes32 identifier,
+        uint256 timestamp,
+        bytes memory ancillaryData
+    ) public view returns (bool) {
+        return hasPrice(identifier, timestamp);
+    }
+
+    function settleAndGetPrice(
+        bytes32 identifier,
+        uint256 timestamp,
+        bytes memory ancillaryData
+    ) external returns (int256) {
+        return verifiedPrices[identifier][timestamp].price;
+    }
+
     // Gets a price that has already been resolved.
-    function getPrice(bytes32 identifier, uint256 time) public view override returns (int256) {
+    function getPrice(bytes32 identifier, uint256 time) public view returns (int256) {
         Price storage lookup = verifiedPrices[identifier][time];
         require(lookup.isAvailable);
         return lookup.price;

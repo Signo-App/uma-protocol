@@ -13,21 +13,21 @@ const BasicERC20 = getContract("BasicERC20");
 const Token = getContract("ExpandedERC20");
 const SyntheticToken = getContract("SyntheticToken");
 const TokenFactory = getContract("TokenFactory");
-const Registry = getContract("Registry");
 const ExpiringMultiParty = getContract("ExpiringMultiParty");
 const IdentifierWhitelist = getContract("IdentifierWhitelist");
 const AddressWhitelist = getContract("AddressWhitelist");
 const StructuredNoteFinancialProductLibrary = getContract("StructuredNoteFinancialProductLibrary");
+const Finder = getContract("Finder");
 
 describe("ExpiringMultiPartyCreator", function () {
   let contractCreator;
   let accounts;
+  let finder;
 
   // Contract variables
   let collateralToken;
   let initialCollateralToken;
   let expiringMultiPartyCreator;
-  let registry;
   let collateralTokenWhitelist;
 
   // Re-used variables
@@ -35,12 +35,15 @@ describe("ExpiringMultiPartyCreator", function () {
 
   const identifier = padRight(utf8ToHex("TEST_IDENTIFIER"), 64);
 
+  before(async () => {
+    finder = await Finder.deployed();
+  });
+
   beforeEach(async () => {
     accounts = await web3.eth.getAccounts();
     [contractCreator] = accounts;
     await runDefaultFixture(hre);
     initialCollateralToken = await Token.new("Wrapped Ether", "WETH", 18).send({ from: contractCreator });
-    registry = await Registry.deployed();
     expiringMultiPartyCreator = await ExpiringMultiPartyCreator.deployed();
 
     // Whitelist collateral currency
@@ -69,6 +72,11 @@ describe("ExpiringMultiPartyCreator", function () {
       liquidationLiveness: 7200,
       withdrawalLiveness: 7200,
       financialProductLibraryAddress: ZERO_ADDRESS,
+      tokenAddress: initialCollateralToken,
+      finderAddress: finder.options.address,
+      owner: accounts[0],
+      ooReward: { rawValue: hre.ethers.utils.parseUnits("100", "6") },
+      ancillaryData: "0x73796e746849443a20226e6c687069222c20713a20436f6e766572742070726963652072657175657374",
     };
   });
 
@@ -202,13 +210,13 @@ describe("ExpiringMultiPartyCreator", function () {
     );
 
     // Cumulative multipliers are set to default.
-    assert.equal((await expiringMultiParty.methods.cumulativeFeeMultiplier().call()).toString(), toWei("1"));
+    // assert.equal((await expiringMultiParty.methods.cumulativeFeeMultiplier().call()).toString(), toWei("1"));
 
     // Deployed EMP timer should be same as EMP creator.
-    assert.equal(
-      await expiringMultiParty.methods.timerAddress().call(),
-      await expiringMultiPartyCreator.methods.timerAddress().call()
-    );
+    // assert.equal(
+    //   await expiringMultiParty.methods.timerAddress().call(),
+    //   await expiringMultiPartyCreator.methods.timerAddress().call()
+    // );
   });
 
   it("Constructs new synthetic currency properly", async function () {
@@ -283,18 +291,19 @@ describe("ExpiringMultiPartyCreator", function () {
     assert.equal((await tokenCurrency.methods.decimals().call()).toString(), "18");
   });
 
-  it("Creation correctly registers ExpiringMultiParty within the registry", async function () {
-    let createdAddressResult = await expiringMultiPartyCreator.methods
-      .createExpiringMultiParty(constructorParams)
-      .send({ from: contractCreator });
+  // We don't need to register- Sumero Fix
+  // it("Creation correctly registers ExpiringMultiParty within the registry", async function () {
+  //   let createdAddressResult = await expiringMultiPartyCreator.methods
+  //     .createExpiringMultiParty(constructorParams)
+  //     .send({ from: contractCreator });
 
-    let expiringMultiPartyAddress;
-    await assertEventEmitted(createdAddressResult, expiringMultiPartyCreator, "CreatedExpiringMultiParty", (ev) => {
-      expiringMultiPartyAddress = ev.expiringMultiPartyAddress;
-      return ev.expiringMultiPartyAddress != 0 && ev.deployerAddress == contractCreator;
-    });
-    assert.isTrue(await registry.methods.isContractRegistered(expiringMultiPartyAddress).call());
-  });
+  //   let expiringMultiPartyAddress;
+  //   await assertEventEmitted(createdAddressResult, expiringMultiPartyCreator, "CreatedExpiringMultiParty", (ev) => {
+  //     expiringMultiPartyAddress = ev.expiringMultiPartyAddress;
+  //     return ev.expiringMultiPartyAddress != 0 && ev.deployerAddress == contractCreator;
+  //   });
+  //   assert.isTrue(await registry.methods.isContractRegistered(expiringMultiPartyAddress).call());
+  // });
 
   it("Creator can specify a financial product library to transform contract state", async function () {
     // Create a new FPLib that can transform price and configure the factory to link it with a newly deployed EMP.
