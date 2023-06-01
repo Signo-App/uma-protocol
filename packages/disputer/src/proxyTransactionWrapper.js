@@ -15,6 +15,7 @@ class ProxyTransactionWrapper {
    * @param {Object} web3 Provider from Truffle instance to connect to Ethereum network.
    * @param {Object} financialContract instance of a financial contract. Either a EMP or a perp. Used to send disputes.
    * @param {Object} gasEstimator Module used to estimate optimal gas price with which to send txns.
+   * @param {Object} collateralToken Collateral token backing the financial contract.
    * @param {String} account Ethereum account from which to send txns.
    * @param {Object} dsProxyManager Module to send transactions via DSProxy. If null will use the unlocked account EOA.
    * @param {Boolean} useDsProxyToDispute Toggles the mode Disputes will be sent with. If true then then Disputes.
@@ -28,12 +29,14 @@ class ProxyTransactionWrapper {
     web3,
     financialContract,
     gasEstimator,
+    collateralToken,
     account,
     dsProxyManager = undefined,
     proxyTransactionWrapperConfig,
   }) {
     this.web3 = web3;
     this.financialContract = financialContract;
+    this.collateralToken = collateralToken;
     this.gasEstimator = gasEstimator;
     this.account = account;
     this.dsProxyManager = dsProxyManager;
@@ -101,6 +104,17 @@ class ProxyTransactionWrapper {
       abi: getAbi("ReserveCurrencyDisputer"),
       bytecode: getBytecode("ReserveCurrencyDisputer"),
     };
+  }
+
+  async getCollateralTokenBalance() {
+    let account;
+    if (process.env.KMS_SIGNER) {
+      account = process.env.KMS_SIGNER_ADDRESS;
+    } else {
+      account = this.account;
+    }
+    const collateralTokenBalance = await this.collateralToken.methods.balanceOf(account).call();
+    return collateralTokenBalance;
   }
 
   // Main entry point for submitting a dispute. If the bot is not using a DSProxy then simply send a normal EOA tx.

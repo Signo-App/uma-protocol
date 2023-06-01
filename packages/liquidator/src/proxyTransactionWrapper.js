@@ -183,6 +183,16 @@ class ProxyTransactionWrapper {
       return maxMintableSynthetics.add(this.toBN(syntheticTokenBalance));
     }
   }
+  async getCollateralTokenBalance() {
+    let account;
+    if (process.env.KMS_SIGNER) {
+      account = process.env.KMS_SIGNER_ADDRESS;
+    } else {
+      account = this.account;
+    }
+    const collateralTokenBalance = await this.collateralToken.methods.balanceOf(account).call();
+    return collateralTokenBalance;
+  }
 
   // Main entry point for submitting a liquidation. If the bot is not using a DSProxy then simply send a normal EOA tx.
   // If the bot is using a DSProxy then route the tx via it.
