@@ -12,6 +12,7 @@ class LiquidatorBalanceAlarm {
   }
 
   async checkLiquidatorBotBalanceAgainstStrategy(currentSyntheticBalance, currentCollateralBalance) {
+    await this.updateNumOfOpenPositions();
     try {
       // Bot wallet balance should be >= targetWalletBalance
       const targetWalletSynthBalance = await this.calculateTargetLiquidatorSynthBalance();
@@ -69,7 +70,6 @@ class LiquidatorBalanceAlarm {
   }
 
   async calculateTargetLiquidatorSynthBalance() {
-    await this.updateNumOfOpenPositions();
     return this.minSponsorTokens * this.numOfOpenPositions;
   }
 
