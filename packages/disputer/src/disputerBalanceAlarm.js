@@ -34,19 +34,17 @@ class DisputerBalanceAlarm {
           currentCollateralBalance: `${currentCollateralBalance}`,
           targetUsdcWalletBalance: `${targetUsdcWalletBalance}`,
         });
-        return true;
-      } else {
-        this.logger.info({
-          at: "Disputer#WalletBalanceAlarm",
-          message: `Current disputer bot wallet balance of ${currentCollateralBalance.toString()} meets the target USDC wallet balance threshold of ${targetUsdcWalletBalance.toString()}. Disputer bot wallet USDC balance is within the healthy range.`,
-          numOfOpenPositions: `${this.numOfOpenPositions}`,
-          totalCollateralAmount: `${this.totalCollateralAmount}`,
-          disputeBondPercentage: `${this.disputerBondPercentage / 1e18}`,
-          currentCollateralBalance: `${currentCollateralBalance}`,
-          targetWalletBalance: `${targetUsdcWalletBalance}`,
-        });
-        return false;
       }
+
+      // this.logger.info({
+      //   at: "Disputer#WalletBalanceAlarm",
+      //   message: `Current disputer bot wallet balance of ${currentCollateralBalance.toString()} meets the target USDC wallet balance threshold of ${targetUsdcWalletBalance.toString()}. Disputer bot wallet USDC balance is within the healthy range.`,
+      //   numOfOpenPositions: `${this.numOfOpenPositions}`,
+      //   totalCollateralAmount: `${this.totalCollateralAmount}`,
+      //   disputeBondPercentage: `${this.disputerBondPercentage / 1e18}`,
+      //   currentCollateralBalance: `${currentCollateralBalance}`,
+      //   targetWalletBalance: `${targetUsdcWalletBalance}`,
+      // });
     } catch (error) {
       this.logger.error({
         at: "Disputer#WalletBalanceAlarm",
