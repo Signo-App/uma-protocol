@@ -1,7 +1,7 @@
 /* eslint-disable prettier/prettier */
 // disputer/src/DisputerBalanceAlarm.js
 class DisputerBalanceAlarm {
-  constructor({ logger, financialContractClient, financialContract, bufferPercentage }) {
+  constructor({ logger, financialContractClient, financialContract, bufferPercentage, pollingDelay }) {
     this.logger = logger;
     this.financialContractClient = financialContractClient;
     this.financialContract = financialContract;
@@ -9,6 +9,8 @@ class DisputerBalanceAlarm {
     this.disputerBondPercentage = this.financialContract.methods.disputeBondPercentage().call();
     this.numOfOpenPositions = 0;
     this.totalCollateralAmount = 0;
+    this.pollingDelay = pollingDelay;
+    this.lastInfoUpdate = 0;
   }
 
   async updateNumOfOpenPositions() {
@@ -17,6 +19,7 @@ class DisputerBalanceAlarm {
 
   async checkDisputerBotBalanceAgainstStrategy(currentCollateralBalance) {
     await this.updateNumOfOpenPositions();
+    let isWarningTriggered = false;
     try {
       // Disputer Bot wallet USDC collateral balance should be >= UsdcTargetWalletBalance
       const targetUsdcWalletBalance = await this.calculateUsdcTargetBalance();
@@ -25,6 +28,7 @@ class DisputerBalanceAlarm {
       console.log("Target USDC Wallet Balance: ", targetUsdcWalletBalance);
 
       if (currentCollateralBalance < targetUsdcWalletBalance) {
+        isWarningTriggered = false;
         this.logger.warn({
           at: "Disputer#WalletBalanceAlarm",
           message: `Disputer bot wallet balance is ${currentCollateralBalance.toString()} which is below the target USDC wallet balance threshold of ${targetUsdcWalletBalance.toString()}. Replenish disputer bot wallet balance immediately`,
@@ -36,15 +40,19 @@ class DisputerBalanceAlarm {
         });
       }
 
-      // this.logger.info({
-      //   at: "Disputer#WalletBalanceAlarm",
-      //   message: `Current disputer bot wallet balance of ${currentCollateralBalance.toString()} meets the target USDC wallet balance threshold of ${targetUsdcWalletBalance.toString()}. Disputer bot wallet USDC balance is within the healthy range.`,
-      //   numOfOpenPositions: `${this.numOfOpenPositions}`,
-      //   totalCollateralAmount: `${this.totalCollateralAmount}`,
-      //   disputeBondPercentage: `${this.disputerBondPercentage / 1e18}`,
-      //   currentCollateralBalance: `${currentCollateralBalance}`,
-      //   targetWalletBalance: `${targetUsdcWalletBalance}`,
-      // });
+      if (!isWarningTriggered && this.lastInfoUpdate >= 86400) {
+        this.lastInfoUpdate = 0;
+        this.logger.info({
+          at: "Disputer#WalletBalanceAlarm",
+          message: `Current disputer bot wallet balance of ${currentCollateralBalance.toString()} meets the target USDC wallet balance threshold of ${targetUsdcWalletBalance.toString()}. Disputer bot wallet USDC balance is within the healthy range.`,
+          numOfOpenPositions: `${this.numOfOpenPositions}`,
+          totalCollateralAmount: `${this.totalCollateralAmount}`,
+          disputeBondPercentage: `${this.disputerBondPercentage / 1e18}`,
+          currentCollateralBalance: `${currentCollateralBalance}`,
+          targetWalletBalance: `${targetUsdcWalletBalance}`,
+        });
+      }
+      this.lastInfoUpdate += this.pollingDelay;
     } catch (error) {
       this.logger.error({
         at: "Disputer#WalletBalanceAlarm",

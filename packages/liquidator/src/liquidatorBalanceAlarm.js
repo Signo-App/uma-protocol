@@ -33,7 +33,7 @@ class LiquidatorBalanceAlarm {
         this.logger.warn({
           at: "Liquidator#WalletBalanceAlarm",
           message: `Bot wallet balance is ${currentSyntheticBalance.toString()} synth which is below the 
-          target wallet balance threshold of ${targetWalletSynthBalance.toString()} synth. Replenish bot wallet synth balance immediately`,
+          target wallet balance threshold of ${targetWalletSynthBalance.toString()} synth. Replenish bot wallet synth balance immediately🤚`,
           numOfOpenPositions: `${this.numOfOpenPositions}`,
           minSponsorTokens: `${this.minSponsorTokens}`,
           currentSyntheticBalance: `${currentSyntheticBalance}`,
@@ -46,7 +46,7 @@ class LiquidatorBalanceAlarm {
         this.logger.warn({
           at: "Liquidator#WalletBalanceAlarm",
           message: `Bot wallet balance is ${currentCollateralBalance.toString()} USDC which is below the 
-          target wallet balance threshold of ${targetWalletCollateralBalance.toString()} USDC. Replenish bot wallet USDC balance immediately`,
+          target wallet balance threshold of ${targetWalletCollateralBalance.toString()} USDC. Replenish bot wallet USDC balance immediately🤚`,
           numOfOpenPositions: `${this.numOfOpenPositions}`,
           ooReward: `${this.ooReward}`,
           currentCollateralBalance: `${currentCollateralBalance}`,
@@ -56,11 +56,12 @@ class LiquidatorBalanceAlarm {
 
       // sends a info log every 24 hours
       if (!warningTriggered && this.lastInfoUpdate >= 86400) {
+        this.lastInfoUpdate = 0;
         this.logger.info({
           at: "Liquidator#WalletBalanceAlarm",
           message: `Current bot wallet balance of ${currentSyntheticBalance.toString()} synth & ${currentCollateralBalance.toString()} USDC 
           meets the target wallet balance threshold of ${targetWalletSynthBalance.toString()} synth and ${targetWalletCollateralBalance.toString()} USDC. 
-          Bot wallet balance is within the healthy range.`,
+          Bot wallet balance is within the healthy range.👍`,
           numOfOpenPositions: `${this.numOfOpenPositions}`,
           minSponsorTokens: `${this.minSponsorTokens}`,
           ooReward: `${this.ooReward}`,
@@ -69,7 +70,6 @@ class LiquidatorBalanceAlarm {
           currentCollateralBalance: `${currentCollateralBalance}`,
           targetWalletCollateralBalance: `${targetWalletCollateralBalance}`,
         });
-        this.lastInfoUpdate = 0;
       }
 
       this.lastInfoUpdate += this.pollingDelay;

@@ -211,6 +211,7 @@ async function run({
       financialContractClient,
       financialContract,
       bufferPercentage: 0.1,
+      pollingDelay,
     });
 
     logger.debug({
