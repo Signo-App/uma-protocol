@@ -28,7 +28,7 @@ class DisputerBalanceAlarm {
       console.log("Target USDC Wallet Balance: ", targetUsdcWalletBalance);
 
       if (currentCollateralBalance < targetUsdcWalletBalance) {
-        isWarningTriggered = false;
+        isWarningTriggered = true;
         this.logger.warn({
           at: "Disputer#WalletBalanceAlarm",
           message: `Disputer bot wallet balance is ${currentCollateralBalance.toString()} which is below the target USDC wallet balance threshold of ${targetUsdcWalletBalance.toString()}. Replenish disputer bot wallet balance immediately`,
