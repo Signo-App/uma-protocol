@@ -31,7 +31,9 @@ class DisputerBalanceAlarm {
         isWarningTriggered = true;
         this.logger.warn({
           at: "Disputer#WalletBalanceAlarm",
-          message: `Disputer bot wallet balance is ${currentCollateralBalance.toString()} which is below the target USDC wallet balance threshold of ${targetUsdcWalletBalance.toString()}. Replenish disputer bot wallet balance immediately`,
+          message: `Disputer bot wallet balance is ${currentCollateralBalance.toString()} which is below the
+          target USDC wallet balance threshold of ${targetUsdcWalletBalance.toString()}.
+          Replenish disputer bot wallet balance immediately🤚`,
           numOfOpenPositions: `${this.numOfOpenPositions}`,
           totalCollateralAmount: `${this.totalCollateralAmount}`,
           disputeBondPercentage: `${this.disputerBondPercentage}`,
@@ -44,7 +46,9 @@ class DisputerBalanceAlarm {
         this.lastInfoUpdate = 0;
         this.logger.info({
           at: "Disputer#WalletBalanceAlarm",
-          message: `Current disputer bot wallet balance of ${currentCollateralBalance.toString()} meets the target USDC wallet balance threshold of ${targetUsdcWalletBalance.toString()}. Disputer bot wallet USDC balance is within the healthy range.`,
+          message: `Current disputer bot wallet balance of ${currentCollateralBalance.toString()} meets the target
+          USDC wallet balance threshold of ${targetUsdcWalletBalance.toString()}.
+          Disputer bot wallet USDC balance is within the healthy range.👍`,
           numOfOpenPositions: `${this.numOfOpenPositions}`,
           totalCollateralAmount: `${this.totalCollateralAmount}`,
           disputeBondPercentage: `${this.disputerBondPercentage / 1e18}`,
