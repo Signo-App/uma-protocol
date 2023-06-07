@@ -256,6 +256,7 @@ async function run({
           retries: errorRetries,
           minTimeout: errorRetriesTimeout * 1000,
           randomize: false,
+          factor: process.env.ERROR_RETRIES_FACTOR ? Number(process.env.ERROR_RETRIES_FACTOR) : 2,
           onRetry: (error) => {
             logger.debug({
               at: "Disputer#index",
