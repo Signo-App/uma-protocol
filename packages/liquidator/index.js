@@ -55,6 +55,7 @@ async function run({
   pollingDelay,
   errorRetries,
   errorRetriesTimeout,
+  errorRetriesFactor,
   priceFeedConfig,
   liquidatorConfig,
   liquidatorOverridePrice,
@@ -75,6 +76,7 @@ async function run({
       pollingDelay,
       errorRetries,
       errorRetriesTimeout,
+      errorRetriesFactor,
       priceFeedConfig,
       liquidatorConfig,
       liquidatorOverridePrice,
@@ -341,7 +343,7 @@ async function run({
           retries: errorRetries,
           minTimeout: errorRetriesTimeout * 1000, // delay between retries in ms
           randomize: false,
-          factor: process.env.ERROR_RETRIES_FACTOR ? Number(process.env.ERROR_RETRIES_FACTOR) : 2,
+          factor: errorRetriesFactor,
           onRetry: (error) => {
             logger.debug({
               at: "Liquidator#index",
@@ -389,6 +391,8 @@ async function Poll(callback) {
       errorRetries: process.env.ERROR_RETRIES ? Number(process.env.ERROR_RETRIES) : 3,
       // Default to 1 seconds in between error re-tries.
       errorRetriesTimeout: process.env.ERROR_RETRIES_TIMEOUT ? Number(process.env.ERROR_RETRIES_TIMEOUT) : 1,
+      // Default to 2, The exponential factor to use for each retry
+      errorRetriesFactor: process.env.ERROR_RETRIES_FACTOR ? Number(process.env.ERROR_RETRIES_FACTOR) : 2,
       // Read price feed configuration from an environment variable. This can be a crypto watch, medianizer or uniswap
       // price feed Config defines the exchanges to use. If not provided then the bot will try and infer a price feed
       // from the EMP_ADDRESS. EG with medianizer: {"type":"medianizer","pair":"ethbtc",
