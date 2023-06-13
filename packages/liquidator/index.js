@@ -270,6 +270,7 @@ async function run({
       financialContract,
       minSponsorTokens,
       pollingDelay,
+      bufferPercentage: 0.3,
     });
 
     logger.debug({

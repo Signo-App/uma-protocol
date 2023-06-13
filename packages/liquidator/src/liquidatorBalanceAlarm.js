@@ -1,10 +1,18 @@
 class LiquidatorBalanceAlarm {
-  constructor({ logger, financialContractClient, financialContract, minSponsorTokens, pollingDelay }) {
+  constructor({
+    logger,
+    financialContractClient,
+    financialContract,
+    minSponsorTokens,
+    pollingDelay,
+    bufferPercentage,
+  }) {
     this.logger = logger;
     this.financialContractClient = financialContractClient;
     this.financialContract = financialContract;
     this.minSponsorTokens = minSponsorTokens;
     this.pollingDelay = pollingDelay;
+    this.bufferPercentage = bufferPercentage;
     this.numOfOpenPositions = 0;
     this.lastInfoUpdate = 0;
   }
@@ -33,9 +41,10 @@ class LiquidatorBalanceAlarm {
         this.logger.warn({
           at: "Liquidator#WalletBalanceAlarm",
           message: `Bot wallet balance is ${currentSyntheticBalance.toString()} synth which is below the 
-          target wallet balance threshold of ${targetWalletSynthBalance.toString()} synth.
+          target wallet balance threshold of ${targetWalletSynthBalance.toString()} synth. 
           Replenish bot wallet synth balance immediately🤚`,
           numOfOpenPositions: `${this.numOfOpenPositions}`,
+          bufferPercentage: `${this.bufferPercentage}`,
           minSponsorTokens: `${this.minSponsorTokens}`,
           currentSyntheticBalance: `${currentSyntheticBalance}`,
           targetWalletSynthBalance: `${targetWalletSynthBalance}`,
@@ -51,6 +60,7 @@ class LiquidatorBalanceAlarm {
           Replenish bot wallet USDC balance immediately🤚`,
           numOfOpenPositions: `${this.numOfOpenPositions}`,
           ooReward: `${this.ooReward}`,
+          bufferPercentage: `${this.bufferPercentage}`,
           currentCollateralBalance: `${currentCollateralBalance}`,
           targetWalletCollateralBalance: `${targetWalletCollateralBalance}`,
         });
@@ -68,6 +78,7 @@ class LiquidatorBalanceAlarm {
           numOfOpenPositions: `${this.numOfOpenPositions}`,
           minSponsorTokens: `${this.minSponsorTokens}`,
           ooReward: `${this.ooReward}`,
+          bufferPercentage: `${this.bufferPercentage}`,
           currentSyntheticBalance: `${currentSyntheticBalance}`,
           targetWalletSynthBalance: `${targetWalletSynthBalance}`,
           currentCollateralBalance: `${currentCollateralBalance}`,
@@ -88,12 +99,12 @@ class LiquidatorBalanceAlarm {
   }
 
   async calculateTargetLiquidatorSynthBalance() {
-    return this.minSponsorTokens * this.numOfOpenPositions;
+    return this.minSponsorTokens * Math.ceil(this.numOfOpenPositions * this.bufferPercentage);
   }
 
   async calculateTargetLiquidatorCollateralBalance() {
-    const ooReward = await this.financialContract.methods.ooReward().call();
-    return this.numOfOpenPositions * ooReward;
+    this.ooReward = await this.financialContract.methods.ooReward().call();
+    return this.ooReward * Math.ceil(this.numOfOpenPositions * this.bufferPercentage);
   }
 }
 
