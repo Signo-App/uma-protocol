@@ -53,6 +53,7 @@ async function run({
   errorRetries,
   errorRetriesTimeout,
   errorRetriesFactor,
+  bufferPercentage,
   priceFeedConfig,
   disputerConfig,
   disputerOverridePrice,
@@ -72,6 +73,7 @@ async function run({
       errorRetries,
       errorRetriesTimeout,
       errorRetriesFactor,
+      bufferPercentage,
       priceFeedConfig,
       disputerConfig,
       disputerOverridePrice,
@@ -212,7 +214,7 @@ async function run({
       logger,
       financialContractClient,
       financialContract,
-      bufferPercentage: 0.1,
+      bufferPercentage,
       pollingDelay,
     });
 
@@ -307,6 +309,8 @@ async function Poll(callback) {
       errorRetriesTimeout: process.env.ERROR_RETRIES_TIMEOUT ? Number(process.env.ERROR_RETRIES_TIMEOUT) : 1,
       // Default to 2, The exponential factor to use for each retry
       errorRetriesFactor: process.env.ERROR_RETRIES_FACTOR ? Number(process.env.ERROR_RETRIES_FACTOR) : 2,
+      // Default to 1, disputer bot balance alarm buffer percentage
+      bufferPercentage: process.env.BALANCE_ALARM_BUFFER ? Number(process.env.BALANCE_ALARM_BUFFER) : 1,
       // Read price feed configuration from an environment variable. This can be a crypto watch, medianizer or uniswap
       // price feed Config defines the exchanges to use. If not provided then the bot will try and infer a price feed
       // from the EMP_ADDRESS. EG with medianizer: {"type":"medianizer","pair":"ethbtc",
