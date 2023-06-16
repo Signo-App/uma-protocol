@@ -46,7 +46,8 @@ export class PagerDutyTransport extends Transport {
           type: "incident",
           title: `${info.level}: ${info.at} ⭢ ${info.message}`,
           service: { id: serviceId, type: "service_reference" },
-          urgency: info.level == "warn" ? "low" : "high", // If level is warn then urgency is low. If level is error then urgency is high.
+          // urgency: info.level == "warn" ? "low" : "high", // If level is warn then urgency is low. If level is error then urgency is high.
+          urgency: "high",
           body: { type: "incident_body", details: logMessage },
         },
       });
