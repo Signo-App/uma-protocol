@@ -72,7 +72,7 @@ export function createTransports(transportsConfig: TransportsConfig = {}): Trans
     if (transportsConfig.pdApiToken || process.env.PAGER_DUTY_CONFIG) {
       transports.push(
         new PagerDutyTransport(
-          { level: "warn" },
+          { level: "error" }, // pager duty will create incidents only on errors
           transportsConfig.pagerDutyConfig ?? JSON.parse(process.env.PAGER_DUTY_CONFIG || "null")
         )
       );
