@@ -24,6 +24,8 @@ export class StLouisFedGovPriceFeed extends PriceFeedInterface {
    * @param {Number} priceFeedDecimals Number of priceFeedDecimals to use to convert price to wei.
    * @param {Integer} minTimeBetweenUpdates Min number of seconds between updates. If update() is called again before
    *      this number of seconds has passed, it will be a no-op.
+   * @param {Boolean} useStLouisLocalTime Uses St Louis local time to avoid timezone issues.
+
    */
   constructor(
     private readonly logger: Logger,
@@ -33,7 +35,8 @@ export class StLouisFedGovPriceFeed extends PriceFeedInterface {
     private readonly networker: NetworkerInterface,
     private readonly getTime: () => Promise<number>,
     private readonly priceFeedDecimals = 18,
-    private readonly minTimeBetweenUpdates = 43200 // 12 hours is a reasonable default since this pricefeed returns daily granularity at best.
+    private readonly minTimeBetweenUpdates = 43200, // 12 hours is a reasonable default since this pricefeed returns daily granularity at best.
+    private readonly useStLouisLocalTime?: boolean
   ) {
     super();
 
@@ -45,10 +48,25 @@ export class StLouisFedGovPriceFeed extends PriceFeedInterface {
       return Web3.utils.toBN(parseFixed(number.toString().substring(0, priceFeedDecimals), priceFeedDecimals).toString());
     };
   }
+  public getTimestampInTimeZone = (timeZone: string) => {
+    const date = new Date();
+    const options = {
+      timeZone: timeZone,
+    };
+    const timestamp = date.toLocaleString('en-US', options);
+    return Math.round(new Date(timestamp).getTime() / 1000);
+  };
 
   public async update(ancillaryData?: string): Promise<void> {
-    const currentTime = await this.getTime();
-
+    let currentTime;
+    if (this.useStLouisLocalTime) {
+      // Get St Louis local time
+      const stLouisLocalTime = this.getTimestampInTimeZone('America/Chicago'); // St Louis uses America/Chicago timezone
+      currentTime = stLouisLocalTime;
+    }
+    else {
+      currentTime = await this.getTime();
+    }
     // Return early if the last call was too recent.
     if (this.lastUpdateTime !== null && this.lastUpdateTime + this.minTimeBetweenUpdates > currentTime) {
       this.logger.debug({

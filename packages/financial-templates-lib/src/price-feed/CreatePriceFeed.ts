@@ -600,7 +600,8 @@ export async function createPriceFeed(
       networker,
       getTime,
       config.priceFeedDecimals,
-      config.minTimeBetweenUpdates
+      config.minTimeBetweenUpdates,
+      true // useStLouisLocalTime
     );
   } else if (config.type === "commodities-api") {
     const requiredFields = ["lookback", "baseCurrency", "commodity", "apiKey"];
