@@ -58,15 +58,8 @@ export class StLouisFedGovPriceFeed extends PriceFeedInterface {
   };
 
   public async update(ancillaryData?: string): Promise<void> {
-    let currentTime;
-    if (this.useStLouisLocalTime) {
-      // Get St Louis local time
-      const stLouisLocalTime = this.getTimestampInTimeZone('America/Chicago'); // St Louis uses America/Chicago timezone
-      currentTime = stLouisLocalTime;
-    }
-    else {
-      currentTime = await this.getTime();
-    }
+    const currentTime = await this.getTime();
+
     // Return early if the last call was too recent.
     if (this.lastUpdateTime !== null && this.lastUpdateTime + this.minTimeBetweenUpdates > currentTime) {
       this.logger.debug({
@@ -86,10 +79,15 @@ export class StLouisFedGovPriceFeed extends PriceFeedInterface {
       lastUpdateTimestamp: this.lastUpdateTime
     });
 
-    this.currentPrice = await this._getHistoricalPrice(currentTime);
-    this.lastUpdateTime = currentTime;
+    if (this.useStLouisLocalTime) {
+      const stLouisTime = this.getTimestampInTimeZone('America/Chicago');  // St Louis uses America/Chicago timezone.
+      this.currentPrice = await this._getHistoricalPrice(stLouisTime);     // use stLouis time to retrieve price.
+    }
+    else {
+      this.currentPrice = await this._getHistoricalPrice(currentTime)
+    }
+    this.lastUpdateTime = currentTime;  // make sure that the last update time always reflects the bot time in any case.
   }
-
   public getCurrentPrice(): BN | null {
     return this.currentPrice;
   }
