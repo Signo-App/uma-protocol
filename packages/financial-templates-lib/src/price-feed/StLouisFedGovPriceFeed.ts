@@ -60,8 +60,8 @@ export class StLouisFedGovPriceFeed extends PriceFeedInterface {
   // Gets time difference in timestamp
   public async getTimeDifferenceInSeconds(){
     const stLouisTime = this.getTimestampInTimeZone('America/Chicago');
-    const GMT = await this.getTime();
-    return (GMT - stLouisTime);
+    const machineTime = await this.getTime();
+    return (machineTime - stLouisTime);
   }
   public async update(ancillaryData?: string): Promise<void> {
     const currentTime = await this.getTime();
@@ -93,7 +93,7 @@ export class StLouisFedGovPriceFeed extends PriceFeedInterface {
   }
 
   private async _getHistoricalPrice(time: number): Promise<BN | null> {
-    // When useStLouisLocalTime is set to true, convert GMT to St Louis Time.
+    // When useStLouisLocalTime is set to true, convert machine time to St Louis Time.
     if (this.useStLouisLocalTime) {
         let timeDifference = await this.getTimeDifferenceInSeconds();
         time = (time - timeDifference)
