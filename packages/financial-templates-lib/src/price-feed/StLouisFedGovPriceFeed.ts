@@ -48,6 +48,7 @@ export class StLouisFedGovPriceFeed extends PriceFeedInterface {
       return Web3.utils.toBN(parseFixed(number.toString().substring(0, priceFeedDecimals), priceFeedDecimals).toString());
     };
   }
+
   public getTimestampInTimeZone = (timeZone: string) => {
     const date = new Date();
     const options = {
@@ -56,7 +57,12 @@ export class StLouisFedGovPriceFeed extends PriceFeedInterface {
     const timestamp = date.toLocaleString('en-US', options);
     return Math.round(new Date(timestamp).getTime() / 1000);
   };
-
+  // Gets time difference in timestamp
+  public async getTimeDifferenceInSeconds(){
+    const stLouisTime = this.getTimestampInTimeZone('America/Chicago');
+    const GMT = await this.getTime();
+    return (GMT - stLouisTime);
+  }
   public async update(ancillaryData?: string): Promise<void> {
     const currentTime = await this.getTime();
 
@@ -79,13 +85,7 @@ export class StLouisFedGovPriceFeed extends PriceFeedInterface {
       lastUpdateTimestamp: this.lastUpdateTime
     });
 
-    if (this.useStLouisLocalTime) {
-      const stLouisTime = this.getTimestampInTimeZone('America/Chicago');  // St Louis uses America/Chicago timezone.
-      this.currentPrice = await this._getHistoricalPrice(stLouisTime);     // use stLouis time to retrieve price.
-    }
-    else {
-      this.currentPrice = await this._getHistoricalPrice(currentTime)
-    }
+    this.currentPrice = await this._getHistoricalPrice(currentTime)
     this.lastUpdateTime = currentTime;  // make sure that the last update time always reflects the bot time in any case.
   }
   public getCurrentPrice(): BN | null {
@@ -93,6 +93,11 @@ export class StLouisFedGovPriceFeed extends PriceFeedInterface {
   }
 
   private async _getHistoricalPrice(time: number): Promise<BN | null> {
+    // When useStLouisLocalTime is set to true, convert GMT to St Louis Time.
+    if (this.useStLouisLocalTime) {
+        let timeDifference = await this.getTimeDifferenceInSeconds();
+        time = (time - timeDifference)
+    }
     const dataFetchStartTime = time - (60 * 60 * 24 * 60) // good guarantee to get at least 1 data point, assuming monthly data points
 
     // dataFetchStart gives an "early bound" to our data
