@@ -24,6 +24,8 @@ export class StLouisFedGovPriceFeed extends PriceFeedInterface {
    * @param {Number} priceFeedDecimals Number of priceFeedDecimals to use to convert price to wei.
    * @param {Integer} minTimeBetweenUpdates Min number of seconds between updates. If update() is called again before
    *      this number of seconds has passed, it will be a no-op.
+   * @param {Boolean} useStLouisLocalTime Uses St Louis local time to avoid timezone issues.
+
    */
   constructor(
     private readonly logger: Logger,
@@ -33,7 +35,8 @@ export class StLouisFedGovPriceFeed extends PriceFeedInterface {
     private readonly networker: NetworkerInterface,
     private readonly getTime: () => Promise<number>,
     private readonly priceFeedDecimals = 18,
-    private readonly minTimeBetweenUpdates = 43200 // 12 hours is a reasonable default since this pricefeed returns daily granularity at best.
+    private readonly minTimeBetweenUpdates = 43200, // 12 hours is a reasonable default since this pricefeed returns daily granularity at best.
+    private readonly useStLouisLocalTime?: boolean
   ) {
     super();
 
@@ -46,6 +49,20 @@ export class StLouisFedGovPriceFeed extends PriceFeedInterface {
     };
   }
 
+  public getTimestampInTimeZone = (timeZone: string) => {
+    const date = new Date();
+    const options = {
+      timeZone: timeZone,
+    };
+    const timestamp = date.toLocaleString('en-US', options);
+    return Math.round(new Date(timestamp).getTime() / 1000);
+  };
+  // Gets time difference in timestamp
+  public async getTimeDifferenceInSeconds(){
+    const stLouisTime = this.getTimestampInTimeZone('America/Chicago');
+    const machineTime = await this.getTime();
+    return (machineTime - stLouisTime);
+  }
   public async update(ancillaryData?: string): Promise<void> {
     const currentTime = await this.getTime();
 
@@ -68,15 +85,19 @@ export class StLouisFedGovPriceFeed extends PriceFeedInterface {
       lastUpdateTimestamp: this.lastUpdateTime
     });
 
-    this.currentPrice = await this._getHistoricalPrice(currentTime);
-    this.lastUpdateTime = currentTime;
+    this.currentPrice = await this._getHistoricalPrice(currentTime)
+    this.lastUpdateTime = currentTime;  // make sure that the last update time always reflects the bot time in any case.
   }
-
   public getCurrentPrice(): BN | null {
     return this.currentPrice;
   }
 
   private async _getHistoricalPrice(time: number): Promise<BN | null> {
+    // When useStLouisLocalTime is set to true, convert machine time to St Louis Time.
+    if (this.useStLouisLocalTime) {
+        let timeDifference = await this.getTimeDifferenceInSeconds();
+        time = (time - timeDifference)
+    }
     const dataFetchStartTime = time - (60 * 60 * 24 * 60) // good guarantee to get at least 1 data point, assuming monthly data points
 
     // dataFetchStart gives an "early bound" to our data
