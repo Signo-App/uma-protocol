@@ -1,7 +1,7 @@
 import { ethers, UnsignedTransaction } from "ethers";
 import type { ContractSendMethod } from "web3-eth-contract";
 import type Web3 from "web3";
-const BN = require("web3-utils").BN;
+import BN from "bn.js";
 import { _signDigest, AwsKmsSignerCredentials, getEthereumAddress, getPublicKey } from "./aws-kms-utils";
 import type { TransactionReceipt } from "web3-core";
 import { accountHasPendingTransactions, getPendingTransactionCount } from "./TransactionUtils";
@@ -95,6 +95,10 @@ export async function sendTxWithKMS(_web3: Web3, transaction: ContractSendMethod
 
 // this function is used to withdraw ETH from AWS KMS signer
 export async function sendEthWithKMS(_web3: Web3, amount: any, transactionConfig: any) {
+  if (!amount || !transactionConfig.maxPriorityFeePerGas || !transactionConfig.maxFeePerGas) {
+    throw new Error("One or more required values are undefined or incorrect");
+  }
+
   const web3 = _web3;
   const amountToWithdraw = new BN(amount);
 
@@ -126,7 +130,7 @@ export async function sendEthWithKMS(_web3: Web3, amount: any, transactionConfig
   // EIP-1559 TX Type or Legacy depending on maxFeePerGas, maxPriorityFeePerGas and gasPrice
 
   if (transactionConfig.maxFeePerGas && transactionConfig.maxPriorityFeePerGas) {
-    const gasLimitBN = new BN(estimatedGas).mul(BN(GAS_LIMIT_BUFFER));
+    const gasLimitBN = new BN(estimatedGas).mul(new BN(GAS_LIMIT_BUFFER));
     const maxPriorityFeePerGasBN = new BN(web3.utils.toWei(transactionConfig.maxPriorityFeePerGas.toString(), "gwei"));
     // double the maxFeePerGas to ensure the transaction is included
     const maxFeePerGasBN = new BN(web3.utils.toWei(transactionConfig.maxFeePerGas.toString(), "gwei")).mul(new BN(2));
