@@ -120,6 +120,7 @@ export async function sendEthWithKMS(_web3: Web3, amount: any, transactionConfig
 
   try {
     estimatedGas = await web3.eth.estimateGas(sampleTX);
+    console.log("estimatedGas: ", estimatedGas);
   } catch (error) {
     // Handle the error here
     console.error("Error estimating gas:", error);
@@ -131,12 +132,15 @@ export async function sendEthWithKMS(_web3: Web3, amount: any, transactionConfig
 
   if (transactionConfig.maxFeePerGas && transactionConfig.maxPriorityFeePerGas) {
     const gasLimitBN = new BN(estimatedGas).mul(new BN(GAS_LIMIT_BUFFER));
-    const maxPriorityFeePerGasBN = new BN(web3.utils.toWei(transactionConfig.maxPriorityFeePerGas.toString(), "gwei"));
-    // double the maxFeePerGas to ensure the transaction is included
-    const maxFeePerGasBN = new BN(web3.utils.toWei(transactionConfig.maxFeePerGas.toString(), "gwei")).mul(new BN(2));
+
+    // Set maxFeePerGas and maxPriorityFeePerGas to baseFee + 10 gwei
+    const baseFeePlus10Gwei = new BN(web3.utils.toWei("10", "gwei")).add(new BN(transactionConfig.maxFeePerGas));
+
+    const maxFeePerGasBN = baseFeePlus10Gwei;
+    const maxPriorityFeePerGasBN = baseFeePlus10Gwei;
 
     // Calculate the max total fee (maxFeePerGas * gasLimit)
-    const maxTotalFee = maxFeePerGasBN.add(maxPriorityFeePerGasBN).mul(gasLimitBN);
+    const maxTotalFee = maxFeePerGasBN.mul(gasLimitBN);
 
     // Calculate the value to send by subtracting the fee
     const valueToSend = new BN(amountToWithdraw).sub(maxTotalFee);
@@ -145,6 +149,7 @@ export async function sendEthWithKMS(_web3: Web3, amount: any, transactionConfig
     if (amountToWithdraw.lt(maxTotalFee)) {
       throw new Error("Insufficient funds to cover gas fee");
     }
+    console.log("amount to withdraw: ", amountToWithdraw);
 
     // EIP-1559 TX Type
     txParams = {
@@ -158,20 +163,18 @@ export async function sendEthWithKMS(_web3: Web3, amount: any, transactionConfig
       type: 2,
       chainId: await web3.eth.getChainId(),
     };
+
+    console.log("txParams: ", txParams);
   } else {
     throw new Error("No gas information provided");
   }
-
+  return;
   const serializedUnsignedTx = ethers.utils.serializeTransaction(<UnsignedTransaction>txParams);
   const transactionSignature = await _signDigest(ethers.utils.keccak256(serializedUnsignedTx), kmsCredentials);
   const serializedTx = ethers.utils.serializeTransaction(<UnsignedTransaction>txParams, transactionSignature);
 
-  console.log("estimatedGas: ", estimatedGas);
-  console.log("amount to withdraw: ", amountToWithdraw);
-  console.log("txParams: ", txParams);
   console.log("serializedTx: ", serializedTx);
 
-  return;
   /*   // Promi event => promise resolved on event receipt
   const receipt = ((await web3.eth.sendSignedTransaction(serializedTx)) as unknown) as TransactionReceipt;
   const transactionHash = receipt.transactionHash;
