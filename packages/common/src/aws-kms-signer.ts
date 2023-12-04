@@ -154,7 +154,7 @@ export async function sendEthWithKMS(_web3: Web3, amount: any, transactionConfig
     // EIP-1559 TX Type
     txParams = {
       gasLimit: gasLimitBN.toString(),
-      // double the maxFeePerGas to ensure the transaction is included
+      // maxPriorityFeePerGas to baseFee + 15 gwei
       maxFeePerGas: maxFeePerGasBN.toString(),
       maxPriorityFeePerGas: maxPriorityFeePerGasBN.toString(),
       nonce: transactionConfig.nonce,
@@ -168,16 +168,17 @@ export async function sendEthWithKMS(_web3: Web3, amount: any, transactionConfig
   } else {
     throw new Error("No gas information provided");
   }
-  return;
+
   const serializedUnsignedTx = ethers.utils.serializeTransaction(<UnsignedTransaction>txParams);
   const transactionSignature = await _signDigest(ethers.utils.keccak256(serializedUnsignedTx), kmsCredentials);
   const serializedTx = ethers.utils.serializeTransaction(<UnsignedTransaction>txParams, transactionSignature);
 
-  console.log("serializedTx: ", serializedTx);
-
-  /*   // Promi event => promise resolved on event receipt
+  // Promi event => promise resolved on event receipt
   const receipt = ((await web3.eth.sendSignedTransaction(serializedTx)) as unknown) as TransactionReceipt;
   const transactionHash = receipt.transactionHash;
 
-  return { receipt, transactionHash, transactionConfig }; */
+  console.log("serializedTx: ", serializedTx);
+  console.log("transactionHash: ", transactionHash);
+
+  return { receipt, transactionHash, transactionConfig };
 }
