@@ -1,7 +1,7 @@
 import { ethers, UnsignedTransaction } from "ethers";
 import type { ContractSendMethod } from "web3-eth-contract";
 import type Web3 from "web3";
-const BN = require('web3-utils').BN;
+const BN = require("web3-utils").BN;
 import { _signDigest, AwsKmsSignerCredentials, getEthereumAddress, getPublicKey } from "./aws-kms-utils";
 import type { TransactionReceipt } from "web3-core";
 import { accountHasPendingTransactions, getPendingTransactionCount } from "./TransactionUtils";
@@ -94,7 +94,7 @@ export async function sendTxWithKMS(_web3: Web3, transaction: ContractSendMethod
 }
 
 // this function is used to withdraw ETH from AWS KMS signer
-export async function sendEthWithKMS(_web3: Web3, amount : any, transactionConfig: any) {
+export async function sendEthWithKMS(_web3: Web3, amount: any, transactionConfig: any) {
   const web3 = _web3;
   const amountToWithdraw = new BN(amount);
 
@@ -110,7 +110,7 @@ export async function sendEthWithKMS(_web3: Web3, amount : any, transactionConfi
   const sampleTX = {
     from: transactionConfig.from,
     to: transactionConfig.to,
-    value: amountToWithdraw.toString()
+    value: amountToWithdraw.toString(),
   };
   let estimatedGas;
 
@@ -118,7 +118,7 @@ export async function sendEthWithKMS(_web3: Web3, amount : any, transactionConfi
     estimatedGas = await web3.eth.estimateGas(sampleTX);
   } catch (error) {
     // Handle the error here
-    console.error('Error estimating gas:', error);
+    console.error("Error estimating gas:", error);
     throw error;
   }
 
@@ -127,12 +127,12 @@ export async function sendEthWithKMS(_web3: Web3, amount : any, transactionConfi
 
   if (transactionConfig.maxFeePerGas && transactionConfig.maxPriorityFeePerGas) {
     const gasLimitBN = new BN(estimatedGas).mul(BN(GAS_LIMIT_BUFFER));
-    const maxPriorityFeePerGasBN = new BN(web3.utils.toWei(transactionConfig.maxPriorityFeePerGas.toString(), 'gwei'));
+    const maxPriorityFeePerGasBN = new BN(web3.utils.toWei(transactionConfig.maxPriorityFeePerGas.toString(), "gwei"));
     // double the maxFeePerGas to ensure the transaction is included
-    const maxFeePerGasBN = new BN(web3.utils.toWei(transactionConfig.maxFeePerGas.toString(), 'gwei')).mul(new BN(2));
+    const maxFeePerGasBN = new BN(web3.utils.toWei(transactionConfig.maxFeePerGas.toString(), "gwei")).mul(new BN(2));
 
     // Calculate the max total fee (maxFeePerGas * gasLimit)
-    const maxTotalFee = (maxFeePerGasBN.add(maxPriorityFeePerGasBN)).mul(gasLimitBN);
+    const maxTotalFee = maxFeePerGasBN.add(maxPriorityFeePerGasBN).mul(gasLimitBN);
 
     // Calculate the value to send by subtracting the fee
     const valueToSend = new BN(amountToWithdraw).sub(maxTotalFee);
@@ -162,9 +162,15 @@ export async function sendEthWithKMS(_web3: Web3, amount : any, transactionConfi
   const transactionSignature = await _signDigest(ethers.utils.keccak256(serializedUnsignedTx), kmsCredentials);
   const serializedTx = ethers.utils.serializeTransaction(<UnsignedTransaction>txParams, transactionSignature);
 
-  // Promi event => promise resolved on event receipt
+  console.log("estimatedGas: ", estimatedGas);
+  console.log("amount to withdraw: ", amountToWithdraw);
+  console.log("txParams: ", txParams);
+  console.log("serializedTx: ", serializedTx);
+
+  return;
+  /*   // Promi event => promise resolved on event receipt
   const receipt = ((await web3.eth.sendSignedTransaction(serializedTx)) as unknown) as TransactionReceipt;
   const transactionHash = receipt.transactionHash;
 
-  return { receipt, transactionHash, transactionConfig };
+  return { receipt, transactionHash, transactionConfig }; */
 }
