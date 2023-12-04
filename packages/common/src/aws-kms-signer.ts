@@ -133,11 +133,11 @@ export async function sendEthWithKMS(_web3: Web3, amount: any, transactionConfig
   if (transactionConfig.maxFeePerGas && transactionConfig.maxPriorityFeePerGas) {
     const gasLimitBN = new BN(estimatedGas).mul(new BN(GAS_LIMIT_BUFFER));
 
-    // Set maxFeePerGas and maxPriorityFeePerGas to baseFee + 10 gwei
-    const baseFeePlus10Gwei = new BN(web3.utils.toWei("10", "gwei")).add(new BN(transactionConfig.maxFeePerGas));
+    // Set maxFeePerGas and maxPriorityFeePerGas to baseFee + 15 gwei
+    const baseFeePlus15Gwei = new BN(web3.utils.toWei("15", "gwei")).add(new BN(transactionConfig.maxFeePerGas));
 
-    const maxFeePerGasBN = baseFeePlus10Gwei;
-    const maxPriorityFeePerGasBN = baseFeePlus10Gwei;
+    const maxFeePerGasBN = baseFeePlus15Gwei;
+    const maxPriorityFeePerGasBN = baseFeePlus15Gwei;
 
     // Calculate the max total fee (maxFeePerGas * gasLimit)
     const maxTotalFee = maxFeePerGasBN.mul(gasLimitBN);
